@@ -28,9 +28,12 @@ export default function ChatWindow({ chat, currentUser, onClose, onDeleteChat }:
       const data = await response.json();
       if (data.messages) {
         setMessages(data.messages);
+      } else {
+        setMessages([]);
       }
     } catch (error) {
       console.error('Error loading messages:', error);
+      setMessages([]);
     }
   };
 
@@ -61,7 +64,6 @@ export default function ChatWindow({ chat, currentUser, onClose, onDeleteChat }:
       const data = await response.json();
       if (data.success) {
         setMessages([...messages, message]);
-        updateLastMessage(chat.id, message);
         setNewMessage('');
       }
     } catch (error) {
@@ -69,53 +71,9 @@ export default function ChatWindow({ chat, currentUser, onClose, onDeleteChat }:
     }
   };
 
-  const updateLastMessage = (chatId: string, message: Message) => {
-    // Обновляем для текущего пользователя
-    const userChats = JSON.parse(localStorage.getItem(`chats_${currentUser.id}`) || '[]');
-    const updatedUserChats = userChats.map((c: Chat) => {
-      if (c.id === chatId) {
-        return { ...c, lastMessage: message, updatedAt: Date.now() };
-      }
-      return c;
-    });
-    localStorage.setItem(`chats_${currentUser.id}`, JSON.stringify(updatedUserChats));
-
-    // Обновляем для собеседника
-    const otherParticipantId = chat.participants.find(id => id !== currentUser.id);
-    if (otherParticipantId) {
-      const otherChats = JSON.parse(localStorage.getItem(`chats_${otherParticipantId}`) || '[]');
-      const updatedOtherChats = otherChats.map((c: Chat) => {
-        if (c.participants.includes(currentUser.id)) {
-          return {
-            ...c,
-            lastMessage: message,
-            updatedAt: Date.now(),
-            unreadCount: (c.unreadCount || 0) + 1
-          };
-        }
-        return c;
-      });
-      localStorage.setItem(`chats_${otherParticipantId}`, JSON.stringify(updatedOtherChats));
-    }
-  };
-
   const handleSendVoice = (audioBlob: Blob, duration: number) => {
-    const audioUrl = URL.createObjectURL(audioBlob);
-    
-    const voiceMessage: Message = {
-      id: Date.now().toString(),
-      chatId: chat.id,
-      userId: currentUser.id,
-      userName: currentUser.fullName,
-      content: `🎤 Голосовое сообщение (${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, '0')})`,
-      createdAt: Date.now(),
-      read: false,
-      type: 'voice',
-      fileUrl: audioUrl
-    };
-
-    setMessages([...messages, voiceMessage]);
-    updateLastMessage(chat.id, voiceMessage);
+    // TODO: implement voice message sending
+    console.log('Voice message:', audioBlob, duration);
   };
 
   const handleSendVideo = () => {
@@ -230,16 +188,7 @@ export default function ChatWindow({ chat, currentUser, onClose, onDeleteChat }:
                             : 'bg-[#1a1a1a] text-white rounded-tl-none'
                           }
                         `}>
-                          {msg.type === 'voice' ? (
-                            <div className="flex items-center gap-2">
-                              <button className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center">
-                                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                              </button>
-                              <span className="text-sm">{msg.content}</span>
-                            </div>
-                          ) : (
-                            <p className="text-sm break-words">{msg.content}</p>
-                          )}
+                          <p className="text-sm break-words">{msg.content}</p>
                         </div>
                         <div className={`
                           flex items-center gap-1 mt-1 text-[10px] text-zinc-600
@@ -263,20 +212,6 @@ export default function ChatWindow({ chat, currentUser, onClose, onDeleteChat }:
         ))}
         <div ref={messagesEndRef} />
       </div>
-
-      {/* Индикатор печатает */}
-      {isTyping && (
-        <div className="px-6 py-2">
-          <div className="flex items-center gap-1 text-sm text-zinc-500">
-            <span>печатает</span>
-            <div className="flex gap-1">
-              <div className="w-1 h-1 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-              <div className="w-1 h-1 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-              <div className="w-1 h-1 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Поле ввода */}
       <div className="p-4 border-t border-white/5 shrink-0">
