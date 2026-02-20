@@ -4,9 +4,9 @@ import { useState, useEffect } from 'react';
 import AuthScreen from './components/auth/AuthScreen';
 import ProfileHeader from './components/profile/ProfileHeader';
 import Feed from './components/feed/Feed';
-import { 
-  Grid, Heart, MessageCircle, User, UserPlus, Settings, LogOut, 
-  Send, Plus, X, Camera, Bell 
+import {
+  Grid, Heart, MessageCircle, User, UserPlus, Settings, LogOut,
+  Send, Plus, X, Camera, Bell
 } from 'lucide-react';
 import FriendsList from './components/friends/FriendsList';
 import ChatList from './components/chat/ChatList';
@@ -18,7 +18,7 @@ type TabType = 'profile' | 'friends' | 'chat' | 'feed' | 'settings';
 // ==================== 3. ОСНОВНОЙ КОМПОНЕНТ ====================
 export default function Home() {
   // ==================== 3.1 СОСТОЯНИЯ ====================
-  
+
   // Авторизация
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -241,19 +241,19 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white">
       {/* ===== 4.1 HEADER ===== */}
-      <Header 
-        currentUser={currentUser} 
-        onLogoutClick={() => setShowLogoutModal(true)} 
+      <Header
+        currentUser={currentUser}
+        onLogoutClick={() => setShowLogoutModal(true)}
       />
 
       {/* ===== 4.2 НАВИГАЦИЯ ===== */}
-      <Navigation 
-        activeTab={activeTab} 
-        onTabChange={setActiveTab} 
+      <Navigation
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
       />
 
       {/* ===== 4.3 ОСНОВНОЙ КОНТЕНТ ===== */}
-      <MainContent 
+      <MainContent
         activeTab={activeTab}
         currentUser={currentUser}
         setCurrentUser={setCurrentUser}
@@ -297,12 +297,179 @@ export default function Home() {
 
 // ==================== 5. КОМПОНЕНТ HEADER ====================
 function Header({ currentUser, onLogoutClick }: any) {
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  // Загрузка уведомлений
+  useEffect(() => {
+    if (currentUser) {
+      loadNotifications();
+      const interval = setInterval(loadNotifications, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [currentUser]);
+
+  const loadNotifications = async () => {
+    try {
+      const response = await fetch(`/api/notifications?userId=${currentUser.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        setNotifications(data.notifications || []);
+        setUnreadCount(data.unreadCount || 0);
+      }
+    } catch (error) {
+      console.error('Error loading notifications:', error);
+    }
+  };
+
+  const markAsRead = async (notificationId: string) => {
+    try {
+      await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notificationId })
+      });
+
+      setNotifications(prev =>
+        prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
+      );
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
+  };
+
+  const markAllAsRead = async () => {
+    try {
+      await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          markAll: true
+        })
+      });
+
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setUnreadCount(0);
+    } catch (error) {
+      console.error('Error marking all as read:', error);
+    }
+  };
+
+  const formatTime = (timestamp: number) => {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+
+    if (minutes < 1) return 'только что';
+    if (minutes < 60) return `${minutes} мин назад`;
+    if (hours < 24) return `${hours} ч назад`;
+    if (days < 7) return `${days} д назад`;
+    return new Date(timestamp).toLocaleDateString();
+  };
+
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case 'friend': return '👤';
+      case 'like': return '❤️';
+      case 'comment': return '💬';
+      case 'message': return '📨';
+      default: return '🔔';
+    }
+  };
+
+  const getNotificationText = (notif: any) => {
+    if (notif.text) return notif.text;
+
+    switch (notif.type) {
+      case 'friend':
+        return `${notif.fromUserName} хочет добавить вас в друзья`;
+      case 'like':
+        return `${notif.fromUserName} оценил ваш пост`;
+      case 'comment':
+        return `${notif.fromUserName} прокомментировал ваш пост`;
+      case 'message':
+        return `${notif.fromUserName} написал вам сообщение`;
+      default:
+        return 'Новое уведомление';
+    }
+  };
+
   return (
     <header className="h-16 bg-black/80 border-b border-white/5 flex items-center justify-between px-6">
       <h1 className="text-2xl font-black italic tracking-tighter text-blue-500">
         LINKER
       </h1>
       <div className="flex items-center gap-4">
+        {/* Кнопка уведомлений */}
+        <div className="relative">
+          <button
+            onClick={() => setShowNotifications(!showNotifications)}
+            className="p-2 hover:bg-white/5 rounded-xl transition-colors relative"
+          >
+            <Bell size={20} className="text-zinc-400" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-[10px] flex items-center justify-center text-white font-bold">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
+
+          {/* Выпадающее меню уведомлений */}
+          {showNotifications && (
+            <div className="absolute right-0 mt-2 w-96 bg-[#111] rounded-xl border border-white/10 shadow-2xl z-50">
+              <div className="p-3 border-b border-white/10 flex items-center justify-between">
+                <h3 className="font-medium text-white">Уведомления</h3>
+                {notifications.length > 0 && (
+                  <button
+                    onClick={markAllAsRead}
+                    className="text-xs text-zinc-400 hover:text-white transition-colors"
+                  >
+                    Прочитать все
+                  </button>
+                )}
+              </div>
+
+              <div className="max-h-96 overflow-y-auto">
+                {notifications.length === 0 ? (
+                  <div className="p-6 text-center">
+                    <Bell size={32} className="mx-auto mb-2 text-zinc-600" />
+                    <p className="text-sm text-zinc-500">Нет уведомлений</p>
+                  </div>
+                ) : (
+                  notifications.map(notif => (
+                    <div
+                      key={notif.id}
+                      onClick={() => markAsRead(notif.id)}
+                      className={`p-3 border-b border-white/10 hover:bg-white/5 transition-colors cursor-pointer relative ${!notif.read ? 'bg-blue-500/5' : ''
+                        }`}
+                    >
+                      <div className="flex gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-lg shrink-0">
+                          {getNotificationIcon(notif.type)}
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm text-white">{getNotificationText(notif)}</p>
+                          <p className="text-xs text-zinc-500 mt-1">
+                            {formatTime(notif.createdAt)}
+                          </p>
+                        </div>
+                        {!notif.read && (
+                          <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
         <span className="text-sm text-zinc-400">@{currentUser.nickname}</span>
         <button
           onClick={onLogoutClick}
@@ -332,9 +499,8 @@ function Navigation({ activeTab, onTabChange }: any) {
         <button
           key={id}
           onClick={() => onTabChange(id)}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap ${
-            activeTab === id ? 'text-white' : 'text-zinc-400 hover:bg-white/5 hover:text-white'
-          }`}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap ${activeTab === id ? 'text-white' : 'text-zinc-400 hover:bg-white/5 hover:text-white'
+            }`}
           style={{ backgroundColor: activeTab === id ? '#3b82f6' : 'transparent' }}
         >
           <Icon size={18} />
@@ -580,9 +746,8 @@ function PostCard({ post, currentUser, onLike, onAddComment, onShare }: any) {
       <div className="flex items-center gap-4 pt-2 border-t border-white/5">
         <button
           onClick={handleLike}
-          className={`flex items-center gap-2 transition-colors ${
-            isLiked ? 'text-red-500' : 'text-zinc-400 hover:text-red-500'
-          }`}
+          className={`flex items-center gap-2 transition-colors ${isLiked ? 'text-red-500' : 'text-zinc-400 hover:text-red-500'
+            }`}
         >
           <Heart size={18} fill={isLiked ? 'currentColor' : 'none'} />
           <span className="text-sm">Лайк</span>
