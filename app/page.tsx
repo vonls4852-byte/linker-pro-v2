@@ -6,7 +6,7 @@ import ProfileHeader from './components/profile/ProfileHeader';
 import Feed from './components/feed/Feed';
 import { 
   Grid, Heart, MessageCircle, User, UserPlus, Settings, LogOut, 
-  Send, Plus, X, Camera 
+  Send, Plus, X, Camera, Bell 
 } from 'lucide-react';
 import FriendsList from './components/friends/FriendsList';
 import ChatList from './components/chat/ChatList';

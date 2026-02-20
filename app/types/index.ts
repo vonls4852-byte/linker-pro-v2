@@ -99,7 +99,7 @@ export interface FriendRequest {
   fromUserName: string;
   fromUserNickname: string;
   toUserId: string;
-  toUserName?: string;        // необязательное поле
+  toUserName?: string;
   status: 'pending' | 'accepted' | 'rejected';
   createdAt: number;
 }
@@ -116,13 +116,26 @@ export interface Friend {
 
 export interface Notification {
   id: string;
-  type: 'message' | 'friend' | 'like' | 'comment' | 'system';
-  title: string;
-  text: string;
+  userId: string;
+  type: 'friend' | 'like' | 'comment' | 'message' | 'system';
+  fromUserId: string;
+  fromUserName: string;
+  fromUserNickname: string;
+  fromUserAvatar?: string | null;
+  postId?: string;
+  postContent?: string;
+  title?: string;
+  text?: string;
   time: number;
-  read: boolean;
   link: string;
   icon: string;
+  read: boolean;
+  createdAt: number;
+}
+
+export interface NotificationsResponse {
+  notifications: Notification[];
+  unreadCount: number;
 }
 
 // ==================== ТИПЫ ДЛЯ API ====================
