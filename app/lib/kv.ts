@@ -117,6 +117,34 @@ export async function getAllUsers(): Promise<Partial<User>[]> {
   }
 }
 
+// Поиск пользователей
+export async function searchUsers(query: string): Promise<Partial<User>[]> {
+  if (!redis) return [];
+  
+  try {
+    const ids = await redis.smembers('users:all');
+    const users = [];
+    
+    for (const id of ids) {
+      const user = await getUserById(id);
+      if (user) {
+        if (
+          user.nickname.toLowerCase().includes(query.toLowerCase()) ||
+          user.fullName.toLowerCase().includes(query.toLowerCase())
+        ) {
+          const { password, ...safeUser } = user;
+          users.push(safeUser);
+        }
+      }
+    }
+    
+    return users.slice(0, 10);
+  } catch (error) {
+    console.error('Error searching users:', error);
+    return [];
+  }
+}
+
 // Обновление пользователя
 export async function updateUser(id: string, data: Partial<User>): Promise<User | null> {
   if (!redis) return null;
