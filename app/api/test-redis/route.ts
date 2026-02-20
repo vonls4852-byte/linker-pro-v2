@@ -10,6 +10,13 @@ export async function GET() {
     }
   };
 
+  // Проверяем, подключен ли redis
+  if (!redis) {
+    result.success = false;
+    result.error = 'Redis client is null - check REDIS_URL environment variable';
+    return NextResponse.json(result, { status: 500 });
+  }
+
   try {
     // Пробуем записать
     await redis.set('test:connection', 'ok');
