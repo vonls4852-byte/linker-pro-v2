@@ -22,6 +22,17 @@ export default function ChatList({ currentUser, onSelectChat, selectedChatId }: 
     loadChats();
   }, [currentUser]);
 
+  // Слушаем событие отправки сообщения
+  useEffect(() => {
+    const handleMessageSent = (event: CustomEvent) => {
+      const { chatId, message } = event.detail;
+      updateChatLastMessage(chatId, message);
+    };
+
+    window.addEventListener('messageSent', handleMessageSent as EventListener);
+    return () => window.removeEventListener('messageSent', handleMessageSent as EventListener);
+  }, []);
+
   const loadChats = () => {
     try {
       const saved = localStorage.getItem(`chats_${currentUser.id}`);
@@ -34,6 +45,16 @@ export default function ChatList({ currentUser, onSelectChat, selectedChatId }: 
       console.error('Error loading chats:', error);
       setChats([]);
     }
+  };
+
+  const updateChatLastMessage = (chatId: string, message: any) => {
+    setChats(prevChats => 
+      prevChats.map(chat => 
+        chat.id === chatId 
+          ? { ...chat, lastMessage: message, updatedAt: Date.now() }
+          : chat
+      ).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+    );
   };
 
   // Поиск пользователей для нового чата
@@ -49,12 +70,10 @@ export default function ChatList({ currentUser, onSelectChat, selectedChatId }: 
       const data = await response.json();
       
       if (data.users && Array.isArray(data.users)) {
-        // Получаем ID пользователей, с которыми уже есть чат
         const existingChatUserIds = chats.map(chat => 
-          chat.participants.find((id: string) => id !== currentUser.id)
+          chat.participants?.find((id: string) => id !== currentUser.id)
         ).filter(Boolean);
         
-        // Фильтруем: все пользователи, кроме себя и тех, с кем уже есть чат
         const results = data.users.filter((user: any) => 
           user.id !== currentUser.id &&
           !existingChatUserIds.includes(user.id)
@@ -75,7 +94,6 @@ export default function ChatList({ currentUser, onSelectChat, selectedChatId }: 
   // Создать новый чат
   const createNewChat = (userId: string, userName: string, userNickname: string) => {
     const chatId = `chat_${Date.now()}`;
-    const otherChatId = `chat_${Date.now() + 1}`;
     
     const newChat = {
       id: chatId,
@@ -88,14 +106,13 @@ export default function ChatList({ currentUser, onSelectChat, selectedChatId }: 
       createdAt: Date.now()
     };
 
-    // Обновляем чаты текущего пользователя
     const updatedChats = [newChat, ...chats];
     setChats(updatedChats);
     localStorage.setItem(`chats_${currentUser.id}`, JSON.stringify(updatedChats));
 
     // Создаём чат для другого пользователя
     const otherUserChat = {
-      id: otherChatId,
+      id: `chat_${Date.now() + 1}`,
       type: 'private',
       participants: [userId, currentUser.id],
       name: currentUser.fullName || currentUser.nickname,
@@ -109,18 +126,6 @@ export default function ChatList({ currentUser, onSelectChat, selectedChatId }: 
     otherUserChats.push(otherUserChat);
     localStorage.setItem(`chats_${userId}`, JSON.stringify(otherUserChats));
 
-    // Создаём приветственное сообщение
-    const welcomeMessage = {
-      id: `welcome_${Date.now()}`,
-      chatId: chatId,
-      userId: 'system',
-      userName: 'Система',
-      content: 'Чат создан. Напишите первое сообщение!',
-      createdAt: Date.now(),
-      read: true
-    };
-    localStorage.setItem(`messages_${chatId}`, JSON.stringify([welcomeMessage]));
-
     setShowNewChatModal(false);
     setNewChatSearch('');
     setSearchResults([]);
@@ -132,22 +137,20 @@ export default function ChatList({ currentUser, onSelectChat, selectedChatId }: 
     e.stopPropagation();
     
     if (confirm(`Удалить чат "${chatName}"?`)) {
-      // Удаляем у текущего пользователя
       const updatedChats = chats.filter(c => c.id !== chatId);
       setChats(updatedChats);
       localStorage.setItem(`chats_${currentUser.id}`, JSON.stringify(updatedChats));
 
-      // Если удаляемый чат был выбран - закрываем
       if (selectedChatId === chatId) {
         onSelectChat(null);
       }
 
-      // Удаляем сообщения
       localStorage.removeItem(`messages_${chatId}`);
     }
   };
 
   const formatTime = (timestamp: number) => {
+    if (!timestamp) return '';
     const now = Date.now();
     const diff = now - timestamp;
     const minutes = Math.floor(diff / 60000);
@@ -173,7 +176,6 @@ export default function ChatList({ currentUser, onSelectChat, selectedChatId }: 
     return <MessageCircle size={24} className="text-blue-400" />;
   };
 
-  // Фильтрация чатов по поиску
   const filteredChats = chats
     .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
     .filter(chat => {
@@ -196,7 +198,6 @@ export default function ChatList({ currentUser, onSelectChat, selectedChatId }: 
           </button>
         </div>
         
-        {/* Поиск */}
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
           <input

@@ -45,3 +45,9 @@ export interface NewChatModalProps {
   onChatCreated: (chat: Chat) => void;
   existingChats: Chat[];
 }
+
+export interface VoiceRecorderProps {
+  onSendVoice: (blob: Blob, duration: number) => void;
+  onSendVideo: () => void;
+  onCancel: () => void;
+}

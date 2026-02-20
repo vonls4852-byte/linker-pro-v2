@@ -15,7 +15,19 @@ export default function ChatWindow({ chat, currentUser, onClose, onDeleteChat }:
   useEffect(() => {
     if (chat?.id) {
       loadMessages();
+      markAsRead();
     }
+  }, [chat?.id]);
+
+  // Периодическая проверка новых сообщений
+  useEffect(() => {
+    if (!chat?.id) return;
+
+    const interval = setInterval(() => {
+      loadMessages();
+    }, 3000);
+
+    return () => clearInterval(interval);
   }, [chat?.id]);
 
   useEffect(() => {
@@ -28,12 +40,21 @@ export default function ChatWindow({ chat, currentUser, onClose, onDeleteChat }:
       const data = await response.json();
       if (data.messages) {
         setMessages(data.messages);
-      } else {
-        setMessages([]);
       }
     } catch (error) {
       console.error('Error loading messages:', error);
-      setMessages([]);
+    }
+  };
+
+  const markAsRead = async () => {
+    try {
+      await fetch('/api/messages', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId: chat.id, userId: currentUser.id })
+      });
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
     }
   };
 
@@ -65,15 +86,48 @@ export default function ChatWindow({ chat, currentUser, onClose, onDeleteChat }:
       if (data.success) {
         setMessages([...messages, message]);
         setNewMessage('');
+
+        // Обновляем список чатов (для lastMessage)
+        const event = new CustomEvent('messageSent', { detail: { chatId: chat.id, message } });
+        window.dispatchEvent(event);
       }
     } catch (error) {
       console.error('Error sending message:', error);
     }
   };
 
-  const handleSendVoice = (audioBlob: Blob, duration: number) => {
-    // TODO: implement voice message sending
-    console.log('Voice message:', audioBlob, duration);
+  const handleSendVoice = async (audioBlob: Blob, duration: number) => {
+    // Создаём объект сообщения
+    const voiceMessage: Message = {
+      id: Date.now().toString(),
+      chatId: chat.id,
+      userId: currentUser.id,
+      userName: currentUser.fullName,
+      content: `🎤 Голосовое сообщение (${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, '0')})`,
+      createdAt: Date.now(),
+      read: false,
+      type: 'voice'
+    };
+
+    try {
+      // Отправляем через API
+      const response = await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId: chat.id, message: voiceMessage })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setMessages([...messages, voiceMessage]);
+
+        // Тригерим событие для обновления списка чатов
+        const event = new CustomEvent('messageSent', { detail: { chatId: chat.id, message: voiceMessage } });
+        window.dispatchEvent(event);
+      }
+    } catch (error) {
+      console.error('Error sending voice message:', error);
+    }
   };
 
   const handleSendVideo = () => {
@@ -183,8 +237,8 @@ export default function ChatWindow({ chat, currentUser, onClose, onDeleteChat }:
                         )}
                         <div className={`
                           px-4 py-2 rounded-2xl
-                          ${isMe 
-                            ? 'bg-blue-500 text-white rounded-tr-none' 
+                          ${isMe
+                            ? 'bg-blue-500 text-white rounded-tr-none'
                             : 'bg-[#1a1a1a] text-white rounded-tl-none'
                           }
                         `}>
@@ -196,9 +250,9 @@ export default function ChatWindow({ chat, currentUser, onClose, onDeleteChat }:
                         `}>
                           <span>{formatTime(msg.createdAt)}</span>
                           {isMe && (
-                            <CheckCheck 
-                              size={12} 
-                              className={msg.read ? 'text-blue-400' : 'text-zinc-600'} 
+                            <CheckCheck
+                              size={12}
+                              className={msg.read ? 'text-blue-400' : 'text-zinc-600'}
                             />
                           )}
                         </div>
@@ -222,7 +276,7 @@ export default function ChatWindow({ chat, currentUser, onClose, onDeleteChat }:
           <button className="p-3 bg-purple-500/20 hover:bg-purple-500/30 rounded-xl transition-colors">
             <Image size={20} className="text-purple-400" />
           </button>
-          
+
           <input
             type="text"
             value={newMessage}
@@ -238,7 +292,7 @@ export default function ChatWindow({ chat, currentUser, onClose, onDeleteChat }:
           >
             <Send size={20} className="text-white" />
           </button>
-          
+
           <VoiceRecorder
             onSendVoice={handleSendVoice}
             onSendVideo={handleSendVideo}
