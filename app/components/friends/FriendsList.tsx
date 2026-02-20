@@ -191,6 +191,18 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
     }
   };
 
+  // Создать чат с другом
+  const startChat = (friendId: string, friendName: string) => {
+    // Создаём событие для переключения на чат
+    const event = new CustomEvent('startChat', { 
+      detail: { 
+        userId: friendId,
+        userName: friendName 
+      } 
+    });
+    window.dispatchEvent(event);
+  };
+
   return (
     <div className="space-y-6 pb-24">
       {/* Шапка */}
@@ -299,12 +311,17 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <button className="p-2 hover:bg-blue-500/20 rounded-lg transition-colors">
+                      <button
+                        onClick={() => startChat(friend.id, friend.name || friend.nickname)}
+                        className="p-2 hover:bg-blue-500/20 rounded-lg transition-colors"
+                        title="Написать сообщение"
+                      >
                         <MessageCircle size={18} className="text-blue-400" />
                       </button>
                       <button
                         onClick={() => removeFriend(friend.id, friend.name || 'Пользователь')}
                         className="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
+                        title="Удалить из друзей"
                       >
                         <UserMinus size={18} className="text-red-400" />
                       </button>

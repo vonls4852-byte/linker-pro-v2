@@ -57,6 +57,18 @@ export default function Home() {
     setIsLoading(false);
   }, []);
 
+  useEffect(() => {
+    const handleStartChat = (event: CustomEvent) => {
+      const { userId, userName } = event.detail;
+      // Здесь логика создания/открытия чата
+      setActiveTab('chat');
+      // TODO: создать или открыть чат с userId
+    };
+
+    window.addEventListener('startChat', handleStartChat as EventListener);
+    return () => window.removeEventListener('startChat', handleStartChat as EventListener);
+  }, []);
+
   // ==================== 3.3 ФУНКЦИИ АВТОРИЗАЦИИ ====================
   const handleAuthSuccess = (user: any) => {
     setCurrentUser(user);
