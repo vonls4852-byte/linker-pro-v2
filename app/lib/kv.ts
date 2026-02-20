@@ -117,34 +117,6 @@ export async function getAllUsers(): Promise<Partial<User>[]> {
   }
 }
 
-// Поиск пользователей
-export async function searchUsers(query: string): Promise<Partial<User>[]> {
-  if (!redis) return [];
-  
-  try {
-    const ids = await redis.smembers('users:all');
-    const users = [];
-    
-    for (const id of ids) {
-      const user = await getUserById(id);
-      if (user) {
-        if (
-          user.nickname.toLowerCase().includes(query.toLowerCase()) ||
-          user.fullName.toLowerCase().includes(query.toLowerCase())
-        ) {
-          const { password, ...safeUser } = user;
-          users.push(safeUser);
-        }
-      }
-    }
-    
-    return users.slice(0, 10);
-  } catch (error) {
-    console.error('Error searching users:', error);
-    return [];
-  }
-}
-
 // Обновление пользователя
 export async function updateUser(id: string, data: Partial<User>): Promise<User | null> {
   if (!redis) return null;
@@ -176,6 +148,50 @@ export async function updateUser(id: string, data: Partial<User>): Promise<User 
     console.error('Error updating user:', error);
     return null;
   }
+}
+
+// ==================== ОНЛАЙН-СТАТУС ====================
+
+// Обновить активность пользователя
+export async function updateLastActive(userId: string) {
+  if (!redis) return;
+  try {
+    await redis.set(`lastactive:${userId}`, Date.now().toString());
+  } catch (error) {
+    console.error('Error updating last active:', error);
+  }
+}
+
+// Получить время последней активности
+export async function getLastActive(userId: string): Promise<number | null> {
+  if (!redis) return null;
+  try {
+    const value = await redis.get(`lastactive:${userId}`);
+    return value ? parseInt(value as string, 10) : null;
+  } catch (error) {
+    console.error('Error getting last active:', error);
+    return null;
+  }
+}
+
+// Проверить, онлайн ли пользователь
+export async function isUserOnline(userId: string): Promise<boolean> {
+  const lastActive = await getLastActive(userId);
+  if (!lastActive) return false;
+  
+  const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+  return lastActive > fiveMinutesAgo;
+}
+
+// Получить статусы нескольких пользователей
+export async function getOnlineStatus(userIds: string[]): Promise<Record<string, boolean>> {
+  const status: Record<string, boolean> = {};
+  
+  for (const userId of userIds) {
+    status[userId] = await isUserOnline(userId);
+  }
+  
+  return status;
 }
 
 // ==================== ДРУЗЬЯ ====================

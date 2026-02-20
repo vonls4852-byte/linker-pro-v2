@@ -55,14 +55,14 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
   const searchUsers = async () => {
     if (!searchQuery.trim()) return;
     setLoading(true);
-    
+
     try {
       const response = await fetch(`/api/users?search=${encodeURIComponent(searchQuery)}`);
       const data = await response.json();
-      
+
       if (data.users) {
         const currentUserId = currentUser.id;
-        const results = data.users.filter((user: any) => 
+        const results = data.users.filter((user: any) =>
           user.id !== currentUserId &&
           !friends.some(f => f.id === user.id) &&
           !sentRequests.some(r => r.toUserId === user.id)
@@ -90,7 +90,7 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
       });
 
       const data = await response.json();
-      
+
       if (data.success) {
         const newRequest = {
           id: data.request.id,
@@ -100,7 +100,7 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
           status: 'pending',
           createdAt: Date.now()
         };
-        
+
         const updatedSent = [...sentRequests, newRequest];
         setSentRequests(updatedSent);
         localStorage.setItem(`sent_requests_${currentUser.id}`, JSON.stringify(updatedSent));
@@ -123,7 +123,7 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
       });
 
       const data = await response.json();
-      
+
       if (data.success) {
         setFriendRequests(prev => prev.filter(r => r.id !== requestId));
         const newFriend = {
@@ -152,7 +152,7 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
       });
 
       const data = await response.json();
-      
+
       if (data.success) {
         setFriendRequests(prev => prev.filter(r => r.id !== requestId));
       }
@@ -181,7 +181,7 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
         });
 
         const data = await response.json();
-        
+
         if (data.success) {
           setFriends(prev => prev.filter(f => f.id !== friendId));
         }
@@ -191,14 +191,34 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
     }
   };
 
+  // Загрузка онлайн статусов
+  useEffect(() => {
+    if (friends.length === 0) return;
+
+    const loadOnlineStatus = async () => {
+      const friendIds = friends.map(f => f.id).join(',');
+      try {
+        const response = await fetch(`/api/online?userIds=${friendIds}`);
+        const data = await response.json();
+        setOnlineUsers(Object.keys(data.status).filter(id => data.status[id]));
+      } catch (error) {
+        console.error('Error loading online status:', error);
+      }
+    };
+
+    loadOnlineStatus();
+    const interval = setInterval(loadOnlineStatus, 30000); // обновляем каждые 30 секунд
+
+    return () => clearInterval(interval);
+  }, [friends]);
+
   // Создать чат с другом
   const startChat = (friendId: string, friendName: string) => {
-    // Создаём событие для переключения на чат
-    const event = new CustomEvent('startChat', { 
-      detail: { 
+    const event = new CustomEvent('startChat', {
+      detail: {
         userId: friendId,
-        userName: friendName 
-      } 
+        userName: friendName
+      }
     });
     window.dispatchEvent(event);
   };
@@ -243,33 +263,29 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
       <div className="flex gap-2 border-b border-white/5 pb-2">
         <button
           onClick={() => setActiveTab('friends')}
-          className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-            activeTab === 'friends' ? 'bg-blue-500 text-white' : 'text-zinc-400 hover:text-white'
-          }`}
+          className={`px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'friends' ? 'bg-blue-500 text-white' : 'text-zinc-400 hover:text-white'
+            }`}
         >
           Мои друзья ({friends.length})
         </button>
         <button
           onClick={() => setActiveTab('requests')}
-          className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-            activeTab === 'requests' ? 'bg-blue-500 text-white' : 'text-zinc-400 hover:text-white'
-          }`}
+          className={`px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'requests' ? 'bg-blue-500 text-white' : 'text-zinc-400 hover:text-white'
+            }`}
         >
           Входящие ({friendRequests.length})
         </button>
         <button
           onClick={() => setActiveTab('sent')}
-          className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-            activeTab === 'sent' ? 'bg-blue-500 text-white' : 'text-zinc-400 hover:text-white'
-          }`}
+          className={`px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'sent' ? 'bg-blue-500 text-white' : 'text-zinc-400 hover:text-white'
+            }`}
         >
           Отправленные ({sentRequests.length})
         </button>
         <button
           onClick={() => setActiveTab('search')}
-          className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-            activeTab === 'search' ? 'bg-blue-500 text-white' : 'text-zinc-400 hover:text-white'
-          }`}
+          className={`px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'search' ? 'bg-blue-500 text-white' : 'text-zinc-400 hover:text-white'
+            }`}
         >
           Поиск
         </button>
@@ -301,9 +317,8 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
                             {friend.name ? friend.name.charAt(0).toUpperCase() : '?'}
                           </span>
                         </div>
-                        <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-black ${
-                          onlineUsers.includes(friend.id) ? 'bg-green-500' : 'bg-gray-500'
-                        }`} />
+                        <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-black ${onlineUsers.includes(friend.id) ? 'bg-green-500' : 'bg-gray-500'
+                          }`} />
                       </div>
                       <div>
                         <p className="font-medium text-white">{friend.name || 'Пользователь'}</p>
@@ -442,8 +457,8 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
                     <div className="flex items-center gap-3">
                       <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
                         <span className="text-white font-bold text-lg">
-                          {user.fullName ? user.fullName.charAt(0).toUpperCase() : 
-                           user.nickname ? user.nickname.charAt(0).toUpperCase() : '?'}
+                          {user.fullName ? user.fullName.charAt(0).toUpperCase() :
+                            user.nickname ? user.nickname.charAt(0).toUpperCase() : '?'}
                         </span>
                       </div>
                       <div>

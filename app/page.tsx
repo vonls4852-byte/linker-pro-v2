@@ -107,6 +107,47 @@ export default function Home() {
     return () => window.removeEventListener('startChat', handleStartChat as EventListener);
   }, [currentUser]);
 
+  // Отслеживание активности пользователя
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const updateActivity = async () => {
+      try {
+        await fetch('/api/online', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentUser.id })
+        });
+      } catch (error) {
+        console.error('Error updating activity:', error);
+      }
+    };
+
+    // Обновляем активность при загрузке
+    updateActivity();
+
+    // И при каждом действии
+    const activityEvents = ['mousemove', 'keydown', 'click', 'scroll'];
+
+    const handleActivity = () => {
+      updateActivity();
+    };
+
+    activityEvents.forEach(event => {
+      window.addEventListener(event, handleActivity);
+    });
+
+    // Регулярное обновление каждые 2 минуты (на всякий случай)
+    const interval = setInterval(updateActivity, 120000);
+
+    return () => {
+      activityEvents.forEach(event => {
+        window.removeEventListener(event, handleActivity);
+      });
+      clearInterval(interval);
+    };
+  }, [currentUser]);
+
   // ==================== 3.3 ФУНКЦИИ АВТОРИЗАЦИИ ====================
   const handleAuthSuccess = (user: any) => {
     setCurrentUser(user);
