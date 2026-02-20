@@ -1,10 +1,17 @@
 import { Redis } from '@upstash/redis';
 import { User, Post, Chat, Message, FriendRequest } from '../types';
 
-// Создаём клиент Redis из переменных окружения Railway
+// Проверяем, что URL действительно есть
+console.log('REDIS_URL exists:', !!process.env.REDIS_URL);
+
 export const redis = new Redis({
   url: process.env.REDIS_URL || '',
-  token: '',
+  token: '', // Railway Redis не требует токен отдельно
+});
+
+// Проверим подключение при старте
+redis.set('test:connection', 'ok').catch(err => {
+  console.error('Redis connection failed:', err);
 });
 
 // ==================== БАЗОВЫЕ ОПЕРАЦИИ ====================
