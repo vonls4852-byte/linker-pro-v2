@@ -44,25 +44,29 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
   const searchUsers = async () => {
     if (!searchQuery.trim()) return;
     setLoading(true);
-    
+
     try {
-      // Загружаем всех пользователей из localStorage
-      const allUsers = JSON.parse(localStorage.getItem('all_users') || '[]');
-      const currentUserId = currentUser.id;
-      
-      // Фильтруем:
-      // 1. Не показываем текущего пользователя
-      // 2. Не показываем уже друзей
-      // 3. Не показываем тех, кому уже отправили заявку
-      const results = allUsers.filter((user: any) => 
-        user.id !== currentUserId &&
-        !friends.some(f => f.id === user.id) &&
-        !sentRequests.some(r => r.toUserId === user.id) &&
-        (user.fullName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-         user.nickname?.toLowerCase().includes(searchQuery.toLowerCase()))
-      );
-      
-      setSearchResults(results.slice(0, 10));
+      // Используем API для поиска в Redis
+      const response = await fetch(`/api/users?search=${encodeURIComponent(searchQuery)}`);
+      const data = await response.json();
+
+      if (data.users) {
+        const currentUserId = currentUser.id;
+
+        // Фильтруем результаты:
+        // 1. Убираем текущего пользователя
+        // 2. Убираем уже друзей
+        // 3. Убираем тех, кому уже отправили заявку
+        const results = data.users.filter((user: any) =>
+          user.id !== currentUserId &&
+          !friends.some(f => f.id === user.id) &&
+          !sentRequests.some(r => r.toUserId === user.id)
+        );
+
+        setSearchResults(results);
+      } else {
+        setSearchResults([]);
+      }
     } catch (error) {
       console.error('Search error:', error);
     } finally {
@@ -91,7 +95,7 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
 
     // Сохраняем в отправленные
     setSentRequests([...sentRequests, { id: newRequest.id, toUserId: userId }]);
-    
+
     // Убираем из результатов поиска
     setSearchResults(prev => prev.filter(u => u.id !== userId));
   };
@@ -196,25 +200,22 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
       <div className="flex gap-2 border-b border-white/5 pb-2">
         <button
           onClick={() => setActiveTab('friends')}
-          className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-            activeTab === 'friends' ? 'bg-blue-500 text-white' : 'text-zinc-400 hover:text-white'
-          }`}
+          className={`px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'friends' ? 'bg-blue-500 text-white' : 'text-zinc-400 hover:text-white'
+            }`}
         >
           Мои друзья ({friends.length})
         </button>
         <button
           onClick={() => setActiveTab('requests')}
-          className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-            activeTab === 'requests' ? 'bg-blue-500 text-white' : 'text-zinc-400 hover:text-white'
-          }`}
+          className={`px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'requests' ? 'bg-blue-500 text-white' : 'text-zinc-400 hover:text-white'
+            }`}
         >
           Заявки ({friendRequests.length})
         </button>
         <button
           onClick={() => setActiveTab('search')}
-          className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-            activeTab === 'search' ? 'bg-blue-500 text-white' : 'text-zinc-400 hover:text-white'
-          }`}
+          className={`px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'search' ? 'bg-blue-500 text-white' : 'text-zinc-400 hover:text-white'
+            }`}
         >
           Поиск
         </button>
@@ -246,9 +247,8 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
                             {friend.name.charAt(0)}
                           </span>
                         </div>
-                        <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-black ${
-                          onlineUsers.includes(friend.id) ? 'bg-green-500' : 'bg-gray-500'
-                        }`} />
+                        <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-black ${onlineUsers.includes(friend.id) ? 'bg-green-500' : 'bg-gray-500'
+                          }`} />
                       </div>
                       <div>
                         <p className="font-medium text-white">{friend.name}</p>
