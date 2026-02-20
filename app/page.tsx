@@ -57,17 +57,55 @@ export default function Home() {
     setIsLoading(false);
   }, []);
 
+  // Обработчик для начала чата из списка друзей
   useEffect(() => {
     const handleStartChat = (event: CustomEvent) => {
       const { userId, userName } = event.detail;
-      // Здесь логика создания/открытия чата
+
+      // Проверяем, есть ли уже чат с этим пользователем
+      const existingChats = JSON.parse(localStorage.getItem(`chats_${currentUser.id}`) || '[]');
+      let chat = existingChats.find((c: any) =>
+        c.participants?.includes(userId) && c.type === 'private'
+      );
+
+      if (!chat) {
+        // Создаём новый чат
+        const chatId = `chat_${Date.now()}`;
+        chat = {
+          id: chatId,
+          type: 'private',
+          participants: [currentUser.id, userId],
+          name: userName,
+          lastMessage: null,
+          unreadCount: 0,
+          updatedAt: Date.now(),
+          createdAt: Date.now()
+        };
+
+        // Сохраняем чат для текущего пользователя
+        const updatedChats = [chat, ...existingChats];
+        localStorage.setItem(`chats_${currentUser.id}`, JSON.stringify(updatedChats));
+
+        // Создаём чат для друга
+        const friendChats = JSON.parse(localStorage.getItem(`chats_${userId}`) || '[]');
+        const friendChat = {
+          ...chat,
+          id: `chat_${Date.now() + 1}`,
+          name: currentUser.fullName || currentUser.nickname,
+          participants: [userId, currentUser.id]
+        };
+        friendChats.push(friendChat);
+        localStorage.setItem(`chats_${userId}`, JSON.stringify(friendChats));
+      }
+
+      // Переключаемся на чат и открываем его
       setActiveTab('chat');
-      // TODO: создать или открыть чат с userId
+      setSelectedChat(chat);
     };
 
     window.addEventListener('startChat', handleStartChat as EventListener);
     return () => window.removeEventListener('startChat', handleStartChat as EventListener);
-  }, []);
+  }, [currentUser]);
 
   // ==================== 3.3 ФУНКЦИИ АВТОРИЗАЦИИ ====================
   const handleAuthSuccess = (user: any) => {
