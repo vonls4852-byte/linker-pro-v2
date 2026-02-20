@@ -23,24 +23,29 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
     loadSentRequests();
   }, [currentUser]);
 
-  const loadFriends = () => {
-    const saved = localStorage.getItem(`friends_${currentUser.id}`);
-    if (saved) {
-      setFriends(JSON.parse(saved));
-    } else {
-      setFriends([]);
+  // Загрузка друзей из API
+  const loadFriends = async () => {
+    try {
+      const response = await fetch(`/api/friends?userId=${currentUser.id}`);
+      const data = await response.json();
+      setFriends(data.friends || []);
+    } catch (error) {
+      console.error('Error loading friends:', error);
     }
   };
 
-  const loadFriendRequests = () => {
-    const saved = localStorage.getItem(`friend_requests_${currentUser.id}`);
-    if (saved) {
-      setFriendRequests(JSON.parse(saved));
-    } else {
-      setFriendRequests([]);
+  // Загрузка входящих заявок из API
+  const loadFriendRequests = async () => {
+    try {
+      const response = await fetch(`/api/friends?userId=${currentUser.id}&type=requests`);
+      const data = await response.json();
+      setFriendRequests(data.requests || []);
+    } catch (error) {
+      console.error('Error loading friend requests:', error);
     }
   };
 
+  // Загрузка отправленных заявок (пока из localStorage)
   const loadSentRequests = () => {
     const saved = localStorage.getItem(`sent_requests_${currentUser.id}`);
     if (saved) {
@@ -94,6 +99,7 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
       const data = await response.json();
       
       if (data.success) {
+        // Добавляем в отправленные (локально)
         const newRequest = {
           id: data.request.id,
           toUserId: userId,
@@ -103,8 +109,9 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
           createdAt: Date.now()
         };
         
-        setSentRequests([...sentRequests, newRequest]);
-        localStorage.setItem(`sent_requests_${currentUser.id}`, JSON.stringify([...sentRequests, newRequest]));
+        const updatedSent = [...sentRequests, newRequest];
+        setSentRequests(updatedSent);
+        localStorage.setItem(`sent_requests_${currentUser.id}`, JSON.stringify(updatedSent));
         
         // Убираем из результатов поиска
         setSearchResults(prev => prev.filter(u => u.id !== userId));
@@ -130,10 +137,8 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
       
       if (data.success) {
         // Удаляем заявку
-        const updatedRequests = friendRequests.filter(r => r.id !== requestId);
-        setFriendRequests(updatedRequests);
-        localStorage.setItem(`friend_requests_${currentUser.id}`, JSON.stringify(updatedRequests));
-
+        setFriendRequests(prev => prev.filter(r => r.id !== requestId));
+        
         // Добавляем в друзья
         const newFriend = {
           id: fromUserId,
@@ -142,10 +147,8 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
           avatar: null,
           addedAt: Date.now()
         };
-
-        const updatedFriends = [...friends, newFriend];
-        setFriends(updatedFriends);
-        localStorage.setItem(`friends_${currentUser.id}`, JSON.stringify(updatedFriends));
+        
+        setFriends(prev => [...prev, newFriend]);
       }
     } catch (error) {
       console.error('Error accepting request:', error);
@@ -167,9 +170,7 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
       const data = await response.json();
       
       if (data.success) {
-        const updatedRequests = friendRequests.filter(r => r.id !== requestId);
-        setFriendRequests(updatedRequests);
-        localStorage.setItem(`friend_requests_${currentUser.id}`, JSON.stringify(updatedRequests));
+        setFriendRequests(prev => prev.filter(r => r.id !== requestId));
       }
     } catch (error) {
       console.error('Error rejecting request:', error);
@@ -184,11 +185,27 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
   };
 
   // Удалить из друзей
-  const removeFriend = (friendId: string, friendName: string) => {
+  const removeFriend = async (friendId: string, friendName: string) => {
     if (confirm(`Удалить ${friendName} из друзей?`)) {
-      const updatedFriends = friends.filter(f => f.id !== friendId);
-      setFriends(updatedFriends);
-      localStorage.setItem(`friends_${currentUser.id}`, JSON.stringify(updatedFriends));
+      try {
+        const response = await fetch('/api/friends', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'remove',
+            userId: currentUser.id,
+            friendId
+          })
+        });
+
+        const data = await response.json();
+        
+        if (data.success) {
+          setFriends(prev => prev.filter(f => f.id !== friendId));
+        }
+      } catch (error) {
+        console.error('Error removing friend:', error);
+      }
     }
   };
 
