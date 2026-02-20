@@ -1,0 +1,370 @@
+"use client";
+import React, { useState, useEffect } from 'react';
+import { UserPlus, UserMinus, MessageCircle, Search, X, Check } from 'lucide-react';
+
+interface FriendsListProps {
+  currentUser: any;
+}
+
+export default function FriendsList({ currentUser }: FriendsListProps) {
+  const [friends, setFriends] = useState<any[]>([]);
+  const [friendRequests, setFriendRequests] = useState<any[]>([]);
+  const [sentRequests, setSentRequests] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'friends' | 'requests' | 'search'>('friends');
+  const [loading, setLoading] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+
+  // Загрузка друзей
+  useEffect(() => {
+    loadFriends();
+    loadFriendRequests();
+  }, [currentUser]);
+
+  const loadFriends = () => {
+    const saved = localStorage.getItem(`friends_${currentUser.id}`);
+    if (saved) {
+      setFriends(JSON.parse(saved));
+    } else {
+      setFriends([]);
+    }
+  };
+
+  const loadFriendRequests = () => {
+    const saved = localStorage.getItem(`friend_requests_${currentUser.id}`);
+    if (saved) {
+      setFriendRequests(JSON.parse(saved));
+    } else {
+      setFriendRequests([]);
+    }
+  };
+
+  // Поиск пользователей
+  const searchUsers = async () => {
+    if (!searchQuery.trim()) return;
+    setLoading(true);
+    
+    try {
+      // Загружаем всех пользователей из localStorage
+      const allUsers = JSON.parse(localStorage.getItem('all_users') || '[]');
+      const currentUserId = currentUser.id;
+      
+      // Фильтруем:
+      // 1. Не показываем текущего пользователя
+      // 2. Не показываем уже друзей
+      // 3. Не показываем тех, кому уже отправили заявку
+      const results = allUsers.filter((user: any) => 
+        user.id !== currentUserId &&
+        !friends.some(f => f.id === user.id) &&
+        !sentRequests.some(r => r.toUserId === user.id) &&
+        (user.fullName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+         user.nickname?.toLowerCase().includes(searchQuery.toLowerCase()))
+      );
+      
+      setSearchResults(results.slice(0, 10));
+    } catch (error) {
+      console.error('Search error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Отправить заявку
+  const sendFriendRequest = (userId: string, userName: string, userNickname: string) => {
+    const newRequest = {
+      id: Date.now().toString(),
+      fromUserId: currentUser.id,
+      fromUserName: currentUser.fullName,
+      fromUserNickname: currentUser.nickname,
+      toUserId: userId,
+      toUserName: userName,
+      toUserNickname: userNickname,
+      status: 'pending',
+      createdAt: Date.now()
+    };
+
+    // Сохраняем у получателя
+    const recipientRequests = JSON.parse(localStorage.getItem(`friend_requests_${userId}`) || '[]');
+    recipientRequests.push(newRequest);
+    localStorage.setItem(`friend_requests_${userId}`, JSON.stringify(recipientRequests));
+
+    // Сохраняем в отправленные
+    setSentRequests([...sentRequests, { id: newRequest.id, toUserId: userId }]);
+    
+    // Убираем из результатов поиска
+    setSearchResults(prev => prev.filter(u => u.id !== userId));
+  };
+
+  // Принять заявку
+  const acceptRequest = (requestId: string, fromUserId: string, fromUserName: string, fromUserNickname: string) => {
+    // Удаляем заявку
+    const updatedRequests = friendRequests.filter(r => r.id !== requestId);
+    setFriendRequests(updatedRequests);
+    localStorage.setItem(`friend_requests_${currentUser.id}`, JSON.stringify(updatedRequests));
+
+    // Добавляем в друзья
+    const newFriend = {
+      id: fromUserId,
+      name: fromUserName,
+      nickname: fromUserNickname,
+      avatar: null,
+      addedAt: Date.now()
+    };
+
+    const updatedFriends = [...friends, newFriend];
+    setFriends(updatedFriends);
+    localStorage.setItem(`friends_${currentUser.id}`, JSON.stringify(updatedFriends));
+
+    // Добавляем текущего пользователя в друзья к отправителю
+    const senderFriends = JSON.parse(localStorage.getItem(`friends_${fromUserId}`) || '[]');
+    senderFriends.push({
+      id: currentUser.id,
+      name: currentUser.fullName,
+      nickname: currentUser.nickname,
+      avatar: null,
+      addedAt: Date.now()
+    });
+    localStorage.setItem(`friends_${fromUserId}`, JSON.stringify(senderFriends));
+  };
+
+  // Отклонить заявку
+  const rejectRequest = (requestId: string) => {
+    const updatedRequests = friendRequests.filter(r => r.id !== requestId);
+    setFriendRequests(updatedRequests);
+    localStorage.setItem(`friend_requests_${currentUser.id}`, JSON.stringify(updatedRequests));
+  };
+
+  // Удалить из друзей
+  const removeFriend = (friendId: string, friendName: string) => {
+    if (confirm(`Удалить ${friendName} из друзей?`)) {
+      const updatedFriends = friends.filter(f => f.id !== friendId);
+      setFriends(updatedFriends);
+      localStorage.setItem(`friends_${currentUser.id}`, JSON.stringify(updatedFriends));
+
+      // Удаляем у другой стороны
+      const otherFriends = JSON.parse(localStorage.getItem(`friends_${friendId}`) || '[]');
+      const updatedOtherFriends = otherFriends.filter((f: any) => f.id !== currentUser.id);
+      localStorage.setItem(`friends_${friendId}`, JSON.stringify(updatedOtherFriends));
+    }
+  };
+
+  return (
+    <div className="space-y-6 pb-24">
+      {/* Шапка */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-blue-500">Друзья</h2>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setActiveTab('search')}
+            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-xl text-sm font-medium transition-colors flex items-center gap-2"
+          >
+            <UserPlus size={16} />
+            <span>Найти друзей</span>
+          </button>
+          {friendRequests.length > 0 && (
+            <button
+              onClick={() => setActiveTab('requests')}
+              className="px-4 py-2 bg-yellow-500/20 hover:bg-yellow-500/30 rounded-xl text-sm font-medium transition-colors flex items-center gap-2 relative"
+            >
+              <span>Заявки</span>
+              <span className="bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">
+                {friendRequests.length}
+              </span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Статистика */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="bg-[#111] rounded-2xl p-5 border border-white/5">
+          <p className="text-3xl font-bold">{friends.length}</p>
+          <p className="text-sm text-zinc-500 mt-1">друзей</p>
+        </div>
+        <div className="bg-[#111] rounded-2xl p-5 border border-white/5">
+          <p className="text-3xl font-bold">{friends.filter(f => onlineUsers.includes(f.id)).length}</p>
+          <p className="text-sm text-zinc-500 mt-1">онлайн</p>
+        </div>
+        <div className="bg-[#111] rounded-2xl p-5 border border-white/5">
+          <p className="text-3xl font-bold">{friendRequests.length}</p>
+          <p className="text-sm text-zinc-500 mt-1">заявки</p>
+        </div>
+      </div>
+
+      {/* Табы */}
+      <div className="flex gap-2 border-b border-white/5 pb-2">
+        <button
+          onClick={() => setActiveTab('friends')}
+          className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+            activeTab === 'friends' ? 'bg-blue-500 text-white' : 'text-zinc-400 hover:text-white'
+          }`}
+        >
+          Мои друзья ({friends.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('requests')}
+          className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+            activeTab === 'requests' ? 'bg-blue-500 text-white' : 'text-zinc-400 hover:text-white'
+          }`}
+        >
+          Заявки ({friendRequests.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('search')}
+          className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+            activeTab === 'search' ? 'bg-blue-500 text-white' : 'text-zinc-400 hover:text-white'
+          }`}
+        >
+          Поиск
+        </button>
+      </div>
+
+      {/* Контент */}
+      <div className="bg-[#111] rounded-2xl p-6 border border-white/5">
+        {activeTab === 'friends' && (
+          <>
+            {friends.length === 0 ? (
+              <div className="text-center py-12">
+                <UserPlus size={48} className="mx-auto mb-4 text-zinc-600" />
+                <p className="text-zinc-400">У вас пока нет друзей</p>
+                <button
+                  onClick={() => setActiveTab('search')}
+                  className="mt-4 px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-xl text-sm transition-colors"
+                >
+                  Найти друзей
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {friends.map(friend => (
+                  <div key={friend.id} className="flex items-center justify-between p-3 bg-black/30 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                          <span className="text-white font-bold text-lg">
+                            {friend.name.charAt(0)}
+                          </span>
+                        </div>
+                        <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-black ${
+                          onlineUsers.includes(friend.id) ? 'bg-green-500' : 'bg-gray-500'
+                        }`} />
+                      </div>
+                      <div>
+                        <p className="font-medium text-white">{friend.name}</p>
+                        <p className="text-xs text-zinc-500">@{friend.nickname}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button className="p-2 hover:bg-blue-500/20 rounded-lg transition-colors">
+                        <MessageCircle size={18} className="text-blue-400" />
+                      </button>
+                      <button
+                        onClick={() => removeFriend(friend.id, friend.name)}
+                        className="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
+                      >
+                        <UserMinus size={18} className="text-red-400" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {activeTab === 'requests' && (
+          <>
+            {friendRequests.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-zinc-400">Нет входящих заявок</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {friendRequests.map(request => (
+                  <div key={request.id} className="flex items-center justify-between p-3 bg-black/30 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                        <span className="text-white font-bold text-lg">
+                          {request.fromUserName.charAt(0)}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="font-medium text-white">{request.fromUserName}</p>
+                        <p className="text-xs text-zinc-500">@{request.fromUserNickname}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => acceptRequest(request.id, request.fromUserId, request.fromUserName, request.fromUserNickname)}
+                        className="p-2 bg-green-500/20 hover:bg-green-500/30 rounded-lg transition-colors"
+                      >
+                        <Check size={18} className="text-green-400" />
+                      </button>
+                      <button
+                        onClick={() => rejectRequest(request.id)}
+                        className="p-2 bg-red-500/20 hover:bg-red-500/30 rounded-lg transition-colors"
+                      >
+                        <X size={18} className="text-red-400" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {activeTab === 'search' && (
+          <>
+            <div className="relative mb-4">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && searchUsers()}
+                placeholder="Введите имя или никнейм..."
+                className="w-full bg-black/50 rounded-xl pl-10 pr-4 py-3 text-sm border border-white/5 outline-none focus:border-blue-500 transition-colors"
+              />
+            </div>
+
+            <button
+              onClick={searchUsers}
+              disabled={loading}
+              className="w-full py-2 bg-blue-500 hover:bg-blue-600 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              {loading ? 'Поиск...' : 'Найти'}
+            </button>
+
+            {searchResults.length > 0 && (
+              <div className="mt-4 space-y-2">
+                {searchResults.map(user => (
+                  <div key={user.id} className="flex items-center justify-between p-3 bg-black/30 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                        <span className="text-white font-bold text-lg">
+                          {user.fullName?.charAt(0) || user.nickname?.charAt(0) || '?'}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="font-medium text-white">{user.fullName || user.nickname}</p>
+                        <p className="text-xs text-zinc-500">@{user.nickname}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => sendFriendRequest(user.id, user.fullName || user.nickname, user.nickname)}
+                      className="px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg text-sm transition-colors"
+                    >
+                      Добавить
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
