@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, Video, Trash2, Send, X } from 'lucide-react';
+import { Mic, Video, X } from 'lucide-react';
 
 interface VoiceRecorderProps {
   onSendVoice: (blob: Blob, duration: number) => void;
@@ -14,7 +14,6 @@ export default function VoiceRecorder({ onSendVoice, onSendVideo, onCancel }: Vo
   const [isDraggingUp, setIsDraggingUp] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [recordingProgress, setRecordingProgress] = useState(0);
-  const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [audioChunks, setAudioChunks] = useState<BlobPart[]>([]);
   const [isVideoMode, setIsVideoMode] = useState(false);
@@ -22,14 +21,12 @@ export default function VoiceRecorder({ onSendVoice, onSendVideo, onCancel }: Vo
   const buttonRef = useRef<HTMLButtonElement>(null);
   const longPressTimer = useRef<NodeJS.Timeout | undefined>(undefined);
   const startY = useRef<number>(0);
-  const dragThreshold = 50; // пикселей для блокировки
+  const dragThreshold = 50;
 
-  // Обработка долгого нажатия
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     startY.current = e.clientY;
     
-    // Таймер для определения долгого нажатия (400ms)
     longPressTimer.current = setTimeout(() => {
       if (!isVideoMode) {
         startRecording();
@@ -43,7 +40,6 @@ export default function VoiceRecorder({ onSendVoice, onSendVideo, onCancel }: Vo
     const deltaY = startY.current - e.clientY;
     if (deltaY > dragThreshold && !isDraggingUp) {
       setIsDraggingUp(true);
-      // Визуальный фидбек - запись заблокирована
     }
   };
 
@@ -54,16 +50,16 @@ export default function VoiceRecorder({ onSendVoice, onSendVideo, onCancel }: Vo
     
     if (isRecording) {
       if (isDraggingUp) {
-        // Если перетащили вверх - продолжаем запись
         setIsDraggingUp(false);
       } else {
-        // Если отпустили - останавливаем запись
         stopRecording();
       }
     } else {
-      // Короткое нажатие - переключение режима
       if (!isLongPressing) {
         setIsVideoMode(!isVideoMode);
+        if (!isVideoMode) {
+          onSendVideo();
+        }
       }
     }
     
@@ -79,7 +75,6 @@ export default function VoiceRecorder({ onSendVoice, onSendVideo, onCancel }: Vo
     }
   };
 
-  // Начать запись
   const startRecording = async () => {
     try {
       setIsLongPressing(true);
@@ -88,7 +83,6 @@ export default function VoiceRecorder({ onSendVoice, onSendVideo, onCancel }: Vo
       setAudioChunks([]);
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      setMediaStream(stream);
       
       const recorder = new MediaRecorder(stream);
       setMediaRecorder(recorder);
@@ -101,11 +95,10 @@ export default function VoiceRecorder({ onSendVoice, onSendVideo, onCancel }: Vo
       
       recorder.start();
       
-      // Таймер для отсчета времени записи
       const interval = setInterval(() => {
         setRecordingTime((prev) => {
           const newTime = prev + 1;
-          setRecordingProgress((newTime / 60) * 100); // Максимум 60 секунд
+          setRecordingProgress((newTime / 60) * 100);
           if (newTime >= 60) {
             stopRecording();
           }
@@ -113,7 +106,6 @@ export default function VoiceRecorder({ onSendVoice, onSendVideo, onCancel }: Vo
         });
       }, 1000);
       
-      // Очистка при остановке
       return () => clearInterval(interval);
     } catch (error) {
       console.error('Error accessing microphone:', error);
@@ -121,7 +113,6 @@ export default function VoiceRecorder({ onSendVoice, onSendVideo, onCancel }: Vo
     }
   };
 
-  // Остановить запись
   const stopRecording = () => {
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
       mediaRecorder.stop();
@@ -130,36 +121,35 @@ export default function VoiceRecorder({ onSendVoice, onSendVideo, onCancel }: Vo
         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
         onSendVoice(audioBlob, recordingTime);
         
-        // Очистка
-        if (mediaStream) {
-          mediaStream.getTracks().forEach(track => track.stop());
+        if (mediaRecorder.stream) {
+          mediaRecorder.stream.getTracks().forEach(track => track.stop());
         }
-        setMediaStream(null);
+        
         setMediaRecorder(null);
         setIsRecording(false);
         setIsLongPressing(false);
         setRecordingTime(0);
         setRecordingProgress(0);
+        setAudioChunks([]);
       };
     }
   };
 
-  // Отмена записи
   const cancelRecording = () => {
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
       mediaRecorder.stop();
-      if (mediaStream) {
-        mediaStream.getTracks().forEach(track => track.stop());
+      if (mediaRecorder.stream) {
+        mediaRecorder.stream.getTracks().forEach(track => track.stop());
       }
     }
     setIsRecording(false);
     setIsLongPressing(false);
     setRecordingTime(0);
     setRecordingProgress(0);
+    setAudioChunks([]);
     onCancel();
   };
 
-  // Форматирование времени
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -169,7 +159,6 @@ export default function VoiceRecorder({ onSendVoice, onSendVideo, onCancel }: Vo
   return (
     <div className="relative">
       {isRecording ? (
-        // Интерфейс записи
         <div className="flex items-center gap-3 bg-[#1a1a1a] rounded-xl px-4 py-2">
           <button
             onClick={cancelRecording}
@@ -182,7 +171,6 @@ export default function VoiceRecorder({ onSendVoice, onSendVideo, onCancel }: Vo
             <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
             <span className="text-sm text-white">{formatTime(recordingTime)}</span>
             
-            {/* Прогресс бар */}
             <div className="flex-1 h-1 bg-zinc-700 rounded-full overflow-hidden">
               <div 
                 className="h-full bg-red-500 transition-all duration-300"
@@ -202,7 +190,6 @@ export default function VoiceRecorder({ onSendVoice, onSendVideo, onCancel }: Vo
           )}
         </div>
       ) : (
-        // Обычная кнопка
         <button
           ref={buttonRef}
           onMouseDown={handleMouseDown}
@@ -220,7 +207,6 @@ export default function VoiceRecorder({ onSendVoice, onSendVideo, onCancel }: Vo
         >
           {isVideoMode ? <Video size={20} /> : <Mic size={20} />}
           
-          {/* Анимация пульсации при долгом нажатии */}
           {isLongPressing && !isRecording && (
             <span className="absolute inset-0 animate-ping bg-current opacity-30 rounded-xl" />
           )}
