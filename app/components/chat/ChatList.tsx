@@ -1,13 +1,20 @@
 "use client";
-import React, { useState, useEffect } from 'react';
-import { MessageCircle, Users, Plus, Search, CheckCheck, Trash2 } from 'lucide-react';
-import { Chat, ChatListProps } from './types';
-import NewChatModal from './NewChatModal';
+import React, { useState, useEffect, useRef } from 'react';
+import { MessageCircle, Users, Plus, Search, CheckCheck, X, Trash2 } from 'lucide-react';
+
+interface ChatListProps {
+  currentUser: any;
+  onSelectChat: (chat: any) => void;
+  selectedChatId?: string;
+}
 
 export default function ChatList({ currentUser, onSelectChat, selectedChatId }: ChatListProps) {
-  const [chats, setChats] = useState<Chat[]>([]);
+  const [chats, setChats] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewChatModal, setShowNewChatModal] = useState(false);
+  const [newChatSearch, setNewChatSearch] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
 
   // Загрузка чатов
@@ -20,14 +27,127 @@ export default function ChatList({ currentUser, onSelectChat, selectedChatId }: 
       const saved = localStorage.getItem(`chats_${currentUser.id}`);
       if (saved) {
         setChats(JSON.parse(saved));
+      } else {
+        setChats([]);
       }
     } catch (error) {
       console.error('Error loading chats:', error);
+      setChats([]);
     }
   };
 
-  // Форматирование времени
-  const formatTime = (timestamp: number): string => {
+  // Поиск пользователей для нового чата
+  const searchUsers = async () => {
+    if (!newChatSearch.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    setLoading(true);
+    
+    try {
+      const response = await fetch(`/api/users?search=${encodeURIComponent(newChatSearch)}`);
+      const data = await response.json();
+      
+      if (data.users && Array.isArray(data.users)) {
+        // Получаем ID пользователей, с которыми уже есть чат
+        const existingChatUserIds = chats.map(chat => 
+          chat.participants.find((id: string) => id !== currentUser.id)
+        ).filter(Boolean);
+        
+        // Фильтруем: все пользователи, кроме себя и тех, с кем уже есть чат
+        const results = data.users.filter((user: any) => 
+          user.id !== currentUser.id &&
+          !existingChatUserIds.includes(user.id)
+        );
+        
+        setSearchResults(results);
+      } else {
+        setSearchResults([]);
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+      setSearchResults([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Создать новый чат
+  const createNewChat = (userId: string, userName: string, userNickname: string) => {
+    const chatId = `chat_${Date.now()}`;
+    const otherChatId = `chat_${Date.now() + 1}`;
+    
+    const newChat = {
+      id: chatId,
+      type: 'private',
+      participants: [currentUser.id, userId],
+      name: userName,
+      lastMessage: null,
+      unreadCount: 0,
+      updatedAt: Date.now(),
+      createdAt: Date.now()
+    };
+
+    // Обновляем чаты текущего пользователя
+    const updatedChats = [newChat, ...chats];
+    setChats(updatedChats);
+    localStorage.setItem(`chats_${currentUser.id}`, JSON.stringify(updatedChats));
+
+    // Создаём чат для другого пользователя
+    const otherUserChat = {
+      id: otherChatId,
+      type: 'private',
+      participants: [userId, currentUser.id],
+      name: currentUser.fullName || currentUser.nickname,
+      lastMessage: null,
+      unreadCount: 0,
+      updatedAt: Date.now(),
+      createdAt: Date.now()
+    };
+
+    const otherUserChats = JSON.parse(localStorage.getItem(`chats_${userId}`) || '[]');
+    otherUserChats.push(otherUserChat);
+    localStorage.setItem(`chats_${userId}`, JSON.stringify(otherUserChats));
+
+    // Создаём приветственное сообщение
+    const welcomeMessage = {
+      id: `welcome_${Date.now()}`,
+      chatId: chatId,
+      userId: 'system',
+      userName: 'Система',
+      content: 'Чат создан. Напишите первое сообщение!',
+      createdAt: Date.now(),
+      read: true
+    };
+    localStorage.setItem(`messages_${chatId}`, JSON.stringify([welcomeMessage]));
+
+    setShowNewChatModal(false);
+    setNewChatSearch('');
+    setSearchResults([]);
+    onSelectChat(newChat);
+  };
+
+  // Удалить чат
+  const deleteChat = (chatId: string, chatName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (confirm(`Удалить чат "${chatName}"?`)) {
+      // Удаляем у текущего пользователя
+      const updatedChats = chats.filter(c => c.id !== chatId);
+      setChats(updatedChats);
+      localStorage.setItem(`chats_${currentUser.id}`, JSON.stringify(updatedChats));
+
+      // Если удаляемый чат был выбран - закрываем
+      if (selectedChatId === chatId) {
+        onSelectChat(null);
+      }
+
+      // Удаляем сообщения
+      localStorage.removeItem(`messages_${chatId}`);
+    }
+  };
+
+  const formatTime = (timestamp: number) => {
     const now = Date.now();
     const diff = now - timestamp;
     const minutes = Math.floor(diff / 60000);
@@ -41,67 +161,24 @@ export default function ChatList({ currentUser, onSelectChat, selectedChatId }: 
     return new Date(timestamp).toLocaleDateString();
   };
 
-  // Получить имя чата
-  const getChatName = (chat: Chat): string => {
+  const getChatName = (chat: any) => {
     if (chat.type === 'group') return chat.name;
-    return chat.name;
+    return chat.name || 'Пользователь';
   };
 
-  // Получить иконку чата
-  const getChatIcon = (chat: Chat) => {
+  const getChatAvatar = (chat: any) => {
     if (chat.type === 'group') {
       return <Users size={24} className="text-green-400" />;
     }
     return <MessageCircle size={24} className="text-blue-400" />;
   };
 
-  // Удалить чат
-  const deleteChat = (chatId: string, chatName: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    
-    if (confirm(`Удалить чат "${chatName}"?`)) {
-      // Удаляем у текущего пользователя
-      const updatedChats = chats.filter((c: Chat) => c.id !== chatId);
-      setChats(updatedChats);
-      localStorage.setItem(`chats_${currentUser.id}`, JSON.stringify(updatedChats));
-
-      // Если удаляемый чат был выбран - закрываем
-      if (selectedChatId === chatId) {
-        onSelectChat(null);
-      }
-
-      // Удаляем сообщения
-      localStorage.removeItem(`messages_${chatId}`);
-
-      // Удаляем у собеседника
-      const otherParticipantId = chats.find((c: Chat) => c.id === chatId)?.participants
-        .find((id: string) => id !== currentUser.id);
-      
-      if (otherParticipantId) {
-        const otherChats = JSON.parse(localStorage.getItem(`chats_${otherParticipantId}`) || '[]');
-        const updatedOtherChats = otherChats.filter((c: Chat) => 
-          !c.participants.includes(currentUser.id)
-        );
-        localStorage.setItem(`chats_${otherParticipantId}`, JSON.stringify(updatedOtherChats));
-      }
-    }
-  };
-
-  // Обработчик создания нового чата
-  const handleChatCreated = (newChat: Chat) => {
-    const updatedChats = [newChat, ...chats];
-    setChats(updatedChats);
-    localStorage.setItem(`chats_${currentUser.id}`, JSON.stringify(updatedChats));
-    setShowNewChatModal(false);
-    onSelectChat(newChat);
-  };
-
   // Фильтрация чатов по поиску
   const filteredChats = chats
-    .sort((a: Chat, b: Chat) => (b.updatedAt || 0) - (a.updatedAt || 0))
-    .filter((chat: Chat) => {
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+    .filter(chat => {
       if (!searchQuery) return true;
-      return chat.name.toLowerCase().includes(searchQuery.toLowerCase());
+      return (chat.name || '').toLowerCase().includes(searchQuery.toLowerCase());
     });
 
   return (
@@ -146,7 +223,7 @@ export default function ChatList({ currentUser, onSelectChat, selectedChatId }: 
           </div>
         ) : (
           <div className="space-y-1">
-            {filteredChats.map((chat: Chat) => {
+            {filteredChats.map(chat => {
               const isSelected = selectedChatId === chat.id;
               const lastMsg = chat.lastMessage;
               const isMe = lastMsg?.userId === currentUser.id;
@@ -167,12 +244,12 @@ export default function ChatList({ currentUser, onSelectChat, selectedChatId }: 
                     {/* Аватар */}
                     <div className="relative shrink-0">
                       <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                        {getChatIcon(chat)}
+                        {getChatAvatar(chat)}
                       </div>
                       {chat.type === 'private' && (
                         <div className={`
                           absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-black
-                          ${onlineUsers.includes(chat.participants.find((id: string) => id !== currentUser.id) || '')
+                          ${onlineUsers.includes(chat.participants?.find((id: string) => id !== currentUser.id) || '')
                             ? 'bg-green-500'
                             : 'bg-gray-500'
                           }
@@ -233,14 +310,78 @@ export default function ChatList({ currentUser, onSelectChat, selectedChatId }: 
         )}
       </div>
 
-      {/* Модалка создания чата */}
-      <NewChatModal
-        isOpen={showNewChatModal}
-        onClose={() => setShowNewChatModal(false)}
-        currentUser={currentUser}
-        onChatCreated={handleChatCreated}
-        existingChats={chats}
-      />
+      {/* Модалка нового чата */}
+      {showNewChatModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#111] rounded-2xl p-6 w-full max-w-md border border-white/10">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-blue-500">Новый чат</h2>
+              <button
+                onClick={() => {
+                  setShowNewChatModal(false);
+                  setNewChatSearch('');
+                  setSearchResults([]);
+                }}
+                className="p-1 hover:bg-white/5 rounded-lg transition-colors"
+              >
+                <X size={20} className="text-zinc-400" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+                <input
+                  type="text"
+                  value={newChatSearch}
+                  onChange={(e) => setNewChatSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && searchUsers()}
+                  placeholder="Введите имя или никнейм..."
+                  className="w-full bg-black/50 rounded-xl pl-10 pr-4 py-3 text-sm border border-white/5 outline-none focus:border-blue-500 transition-colors text-white"
+                />
+              </div>
+
+              <button
+                onClick={searchUsers}
+                disabled={loading}
+                className="w-full py-2 bg-blue-500 hover:bg-blue-600 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                {loading ? 'Поиск...' : 'Найти'}
+              </button>
+
+              {searchResults.length > 0 && (
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  <p className="text-xs text-zinc-500">Найдено пользователей:</p>
+                  {searchResults.map((user: any) => (
+                    <div
+                      key={user.id}
+                      onClick={() => createNewChat(user.id, user.fullName || user.nickname, user.nickname)}
+                      className="flex items-center gap-3 p-3 bg-black/30 hover:bg-black/50 rounded-xl cursor-pointer transition-colors"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                        <span className="text-white font-bold text-lg">
+                          {user.fullName ? user.fullName.charAt(0).toUpperCase() : 
+                           user.nickname ? user.nickname.charAt(0).toUpperCase() : '?'}
+                        </span>
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium text-white">{user.fullName || user.nickname}</p>
+                        <p className="text-xs text-zinc-500">@{user.nickname || 'unknown'}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {newChatSearch && searchResults.length === 0 && !loading && (
+                <p className="text-center text-zinc-500 py-4 text-sm">
+                  Пользователи не найдены
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
