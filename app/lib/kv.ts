@@ -25,7 +25,7 @@ export async function saveUser(user: User) {
     console.error('Redis not connected');
     return false;
   }
-  
+
   try {
     await redis.set(`user:id:${user.id}`, JSON.stringify(user));
     await redis.set(`user:nickname:${user.nickname}`, user.id);
@@ -44,7 +44,7 @@ export async function saveUser(user: User) {
 // Получение пользователя по ID
 export async function getUserById(id: string): Promise<User | null> {
   if (!redis) return null;
-  
+
   try {
     const user = await redis.get(`user:id:${id}`);
     return user ? JSON.parse(user) : null;
@@ -57,7 +57,7 @@ export async function getUserById(id: string): Promise<User | null> {
 // Получение пользователя по никнейму
 export async function getUserByNickname(nickname: string): Promise<User | null> {
   if (!redis) return null;
-  
+
   try {
     const userId = await redis.get(`user:nickname:${nickname}`);
     if (!userId) return null;
@@ -71,7 +71,7 @@ export async function getUserByNickname(nickname: string): Promise<User | null> 
 // Получение пользователя по телефону
 export async function getUserByPhone(phone: string): Promise<User | null> {
   if (!redis) return null;
-  
+
   try {
     const userId = await redis.get(`user:phone:${phone}`);
     if (!userId) return null;
@@ -85,7 +85,7 @@ export async function getUserByPhone(phone: string): Promise<User | null> {
 // Получение пользователя по email
 export async function getUserByEmail(email: string): Promise<User | null> {
   if (!redis) return null;
-  
+
   try {
     const userId = await redis.get(`user:email:${email}`);
     if (!userId) return null;
@@ -99,7 +99,7 @@ export async function getUserByEmail(email: string): Promise<User | null> {
 // Получение всех пользователей
 export async function getAllUsers(): Promise<Partial<User>[]> {
   if (!redis) return [];
-  
+
   try {
     const ids = await redis.smembers('users:all');
     const users = [];
@@ -120,29 +120,29 @@ export async function getAllUsers(): Promise<Partial<User>[]> {
 // Обновление пользователя
 export async function updateUser(id: string, data: Partial<User>): Promise<User | null> {
   if (!redis) return null;
-  
+
   try {
     const user = await getUserById(id);
     if (!user) return null;
-    
+
     const updated = { ...user, ...data };
     await redis.set(`user:id:${id}`, JSON.stringify(updated));
-    
+
     if (data.nickname && data.nickname !== user.nickname) {
       await redis.del(`user:nickname:${user.nickname}`);
       await redis.set(`user:nickname:${data.nickname}`, id);
     }
-    
+
     if (data.phone && data.phone !== user.phone) {
       await redis.del(`user:phone:${user.phone}`);
       await redis.set(`user:phone:${data.phone}`, id);
     }
-    
+
     if (data.email && data.email !== user.email) {
       if (user.email) await redis.del(`user:email:${user.email}`);
       await redis.set(`user:email:${data.email}`, id);
     }
-    
+
     return updated;
   } catch (error) {
     console.error('Error updating user:', error);
@@ -150,18 +150,123 @@ export async function updateUser(id: string, data: Partial<User>): Promise<User 
   }
 }
 
-// Остальные функции-заглушки
-export async function savePost(post: Post) { return true; }
-export async function getUserPosts(userId: string): Promise<Post[]> { return []; }
-export async function getFeed(userId: string): Promise<Post[]> { return []; }
-export async function saveChat(chat: Chat) { return true; }
-export async function getUserChats(userId: string): Promise<Chat[]> { return []; }
-export async function saveMessage(chatId: string, message: Message) { return true; }
-export async function getChatMessages(chatId: string): Promise<Message[]> { return []; }
-export async function sendFriendRequest(request: FriendRequest) { return true; }
-export async function getIncomingRequests(userId: string): Promise<FriendRequest[]> { return []; }
-export async function acceptFriendRequest(requestId: string) { return null; }
-export async function getUserFriends(userId: string): Promise<Partial<User>[]> { return []; }
+// ==================== ДРУЗЬЯ ====================
+
+// Отправить заявку
+export async function sendFriendRequest(request: FriendRequest) {
+  if (!redis) return false;
+
+  try {
+    await redis.set(`friend:request:${request.id}`, JSON.stringify(request));
+    await redis.sadd(`friend:requests:to:${request.toUserId}`, request.id);
+    return true;
+  } catch (error) {
+    console.error('Error sending friend request:', error);
+    return false;
+  }
+}
+
+// Получить входящие заявки
+export async function getIncomingRequests(userId: string): Promise<FriendRequest[]> {
+  if (!redis) return [];
+
+  try {
+    const requestIds = await redis.smembers(`friend:requests:to:${userId}`);
+    const requests = [];
+
+    for (const id of requestIds) {
+      const req = await redis.get(`friend:request:${id}`);
+      if (req) {
+        const reqData = JSON.parse(req) as FriendRequest;
+        if (reqData.status === 'pending') requests.push(reqData);
+      }
+    }
+
+    return requests;
+  } catch (error) {
+    console.error('Error getting incoming requests:', error);
+    return [];
+  }
+}
+
+// Принять заявку
+export async function acceptFriendRequest(requestId: string): Promise<FriendRequest | null> {
+  if (!redis) return null;
+
+  try {
+    const req = await redis.get(`friend:request:${requestId}`);
+    if (!req) return null;
+
+    const requestData = JSON.parse(req) as FriendRequest;
+    requestData.status = 'accepted';
+
+    await redis.set(`friend:request:${requestId}`, JSON.stringify(requestData));
+    await redis.sadd(`friends:user:${requestData.fromUserId}`, requestData.toUserId);
+    await redis.sadd(`friends:user:${requestData.toUserId}`, requestData.fromUserId);
+
+    return requestData;
+  } catch (error) {
+    console.error('Error accepting friend request:', error);
+    return null;
+  }
+}
+
+// Отклонить заявку
+export async function rejectFriendRequest(requestId: string): Promise<FriendRequest | null> {
+  if (!redis) return null;
+
+  try {
+    const req = await redis.get(`friend:request:${requestId}`);
+    if (!req) return null;
+
+    const requestData = JSON.parse(req) as FriendRequest;
+    requestData.status = 'rejected';
+
+    await redis.set(`friend:request:${requestId}`, JSON.stringify(requestData));
+
+    return requestData;
+  } catch (error) {
+    console.error('Error rejecting friend request:', error);
+    return null;
+  }
+}
+
+// Получить друзей пользователя
+export async function getUserFriends(userId: string): Promise<Partial<User>[]> {
+  if (!redis) return [];
+
+  try {
+    const friendIds = await redis.smembers(`friends:user:${userId}`);
+    const friends = [];
+
+    for (const id of friendIds) {
+      const user = await getUserById(id);
+      if (user) {
+        const { password, ...safeUser } = user;
+        friends.push(safeUser);
+      }
+    }
+
+    return friends;
+  } catch (error) {
+    console.error('Error getting user friends:', error);
+    return [];
+  }
+}
+
+// Удалить из друзей
+export async function removeFriend(userId: string, friendId: string): Promise<boolean> {
+  if (!redis) return false;
+
+  try {
+    await redis.srem(`friends:user:${userId}`, friendId);
+    await redis.srem(`friends:user:${friendId}`, userId);
+    return true;
+  } catch (error) {
+    console.error('Error removing friend:', error);
+    return false;
+  }
+}
 
 // Экспортируем redis для прямого использования
 export { redis };
