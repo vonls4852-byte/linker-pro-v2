@@ -1,9 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Send, Paperclip, Image, Mic, X, CheckCheck, MessageCircle, Trash2,
-  File, MapPin, User
-} from 'lucide-react';
+import { Send, Paperclip, Image, Mic, X, CheckCheck, MessageCircle, Trash2 } from 'lucide-react';
 import { Chat, Message, ChatWindowProps } from './types';
 import VoiceRecorder from './VoiceRecorder';
 
@@ -12,9 +9,7 @@ export default function ChatWindow({ chat, currentUser, onClose, onDeleteChat }:
   const [newMessage, setNewMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const [showAttachMenu, setShowAttachMenu] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const attachMenuRef = useRef<HTMLDivElement>(null);
 
   // Загрузка сообщений
   useEffect(() => {
@@ -27,35 +22,12 @@ export default function ChatWindow({ chat, currentUser, onClose, onDeleteChat }:
     scrollToBottom();
   }, [messages]);
 
-  // Закрытие меню при клике вне
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (attachMenuRef.current && !attachMenuRef.current.contains(event.target as Node)) {
-        setShowAttachMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const loadMessages = () => {
+  const loadMessages = async () => {
     try {
-      const saved = localStorage.getItem(`messages_${chat.id}`);
-      if (saved) {
-        setMessages(JSON.parse(saved));
-      } else {
-        // Приветственное сообщение
-        const welcomeMsg: Message = {
-          id: 'welcome',
-          chatId: chat.id,
-          userId: 'system',
-          userName: 'Система',
-          content: 'Чат создан. Напишите первое сообщение!',
-          createdAt: Date.now(),
-          read: true
-        };
-        setMessages([welcomeMsg]);
-        localStorage.setItem(`messages_${chat.id}`, JSON.stringify([welcomeMsg]));
+      const response = await fetch(`/api/messages?chatId=${chat.id}`);
+      const data = await response.json();
+      if (data.messages) {
+        setMessages(data.messages);
       }
     } catch (error) {
       console.error('Error loading messages:', error);
@@ -66,7 +38,7 @@ export default function ChatWindow({ chat, currentUser, onClose, onDeleteChat }:
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (!newMessage.trim()) return;
 
     const message: Message = {
@@ -79,15 +51,22 @@ export default function ChatWindow({ chat, currentUser, onClose, onDeleteChat }:
       read: false
     };
 
-    // Сохраняем сообщение
-    const updatedMessages = [...messages, message];
-    setMessages(updatedMessages);
-    localStorage.setItem(`messages_${chat.id}`, JSON.stringify(updatedMessages));
+    try {
+      const response = await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId: chat.id, message })
+      });
 
-    // Обновляем последнее сообщение в чате
-    updateLastMessage(chat.id, message);
-
-    setNewMessage('');
+      const data = await response.json();
+      if (data.success) {
+        setMessages([...messages, message]);
+        updateLastMessage(chat.id, message);
+        setNewMessage('');
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+    }
   };
 
   const updateLastMessage = (chatId: string, message: Message) => {
@@ -121,7 +100,6 @@ export default function ChatWindow({ chat, currentUser, onClose, onDeleteChat }:
   };
 
   const handleSendVoice = (audioBlob: Blob, duration: number) => {
-    // Создаем URL для аудио
     const audioUrl = URL.createObjectURL(audioBlob);
     
     const voiceMessage: Message = {
@@ -136,12 +114,7 @@ export default function ChatWindow({ chat, currentUser, onClose, onDeleteChat }:
       fileUrl: audioUrl
     };
 
-    // Сохраняем сообщение
-    const updatedMessages = [...messages, voiceMessage];
-    setMessages(updatedMessages);
-    localStorage.setItem(`messages_${chat.id}`, JSON.stringify(updatedMessages));
-    
-    // Обновляем последнее сообщение
+    setMessages([...messages, voiceMessage]);
     updateLastMessage(chat.id, voiceMessage);
   };
 
@@ -151,44 +124,6 @@ export default function ChatWindow({ chat, currentUser, onClose, onDeleteChat }:
 
   const handleCancelRecording = () => {
     setIsRecording(false);
-  };
-
-  // Функции для разных типов вложений
-  const handleAttachPhoto = () => {
-    setShowAttachMenu(false);
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) {
-        alert(`Выбрано фото: ${file.name}`);
-      }
-    };
-    input.click();
-  };
-
-  const handleAttachFile = () => {
-    setShowAttachMenu(false);
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) {
-        alert(`Выбран файл: ${file.name}`);
-      }
-    };
-    input.click();
-  };
-
-  const handleAttachLocation = () => {
-    setShowAttachMenu(false);
-    alert('Отправка геопозиции (в разработке)');
-  };
-
-  const handleAttachContact = () => {
-    setShowAttachMenu(false);
-    alert('Отправка контакта (в разработке)');
   };
 
   const formatTime = (timestamp: number): string => {
@@ -343,80 +278,15 @@ export default function ChatWindow({ chat, currentUser, onClose, onDeleteChat }:
         </div>
       )}
 
-      {/* Поле ввода с меню прикрепления */}
+      {/* Поле ввода */}
       <div className="p-4 border-t border-white/5 shrink-0">
         <div className="flex items-center gap-2">
-          
-          {/* Кнопка прикрепления с меню */}
-          <div className="relative" ref={attachMenuRef}>
-            <button
-              onClick={() => setShowAttachMenu(!showAttachMenu)}
-              className="p-3 bg-green-500/20 hover:bg-green-500/30 rounded-xl transition-colors relative"
-            >
-              <Paperclip size={20} className="text-green-400" />
-            </button>
-
-            {/* Выпадающее меню как в Telegram */}
-            {showAttachMenu && (
-              <div className="absolute bottom-full left-0 mb-2 w-56 bg-[#1a1a1a] rounded-xl border border-white/10 shadow-2xl z-50 overflow-hidden">
-                <div className="p-2 border-b border-white/10">
-                  <p className="text-xs text-zinc-400">Прикрепить</p>
-                </div>
-
-                <button
-                  onClick={handleAttachPhoto}
-                  className="flex items-center gap-3 w-full p-3 hover:bg-white/5 transition-colors"
-                >
-                  <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center">
-                    <Image size={16} className="text-blue-400" />
-                  </div>
-                  <div className="text-left">
-                    <p className="text-sm text-white">Фото</p>
-                    <p className="text-xs text-zinc-500">Изображения</p>
-                  </div>
-                </button>
-
-                <button
-                  onClick={handleAttachFile}
-                  className="flex items-center gap-3 w-full p-3 hover:bg-white/5 transition-colors border-t border-white/5"
-                >
-                  <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center">
-                    <File size={16} className="text-purple-400" />
-                  </div>
-                  <div className="text-left">
-                    <p className="text-sm text-white">Файл</p>
-                    <p className="text-xs text-zinc-500">Документы, архивы</p>
-                  </div>
-                </button>
-
-                <button
-                  onClick={handleAttachLocation}
-                  className="flex items-center gap-3 w-full p-3 hover:bg-white/5 transition-colors border-t border-white/5"
-                >
-                  <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center">
-                    <MapPin size={16} className="text-yellow-400" />
-                  </div>
-                  <div className="text-left">
-                    <p className="text-sm text-white">Геопозиция</p>
-                    <p className="text-xs text-zinc-500">Отправить местоположение</p>
-                  </div>
-                </button>
-
-                <button
-                  onClick={handleAttachContact}
-                  className="flex items-center gap-3 w-full p-3 hover:bg-white/5 transition-colors border-t border-white/5"
-                >
-                  <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
-                    <User size={16} className="text-green-400" />
-                  </div>
-                  <div className="text-left">
-                    <p className="text-sm text-white">Контакт</p>
-                    <p className="text-xs text-zinc-500">Поделиться контактом</p>
-                  </div>
-                </button>
-              </div>
-            )}
-          </div>
+          <button className="p-3 bg-green-500/20 hover:bg-green-500/30 rounded-xl transition-colors">
+            <Paperclip size={20} className="text-green-400" />
+          </button>
+          <button className="p-3 bg-purple-500/20 hover:bg-purple-500/30 rounded-xl transition-colors">
+            <Image size={20} className="text-purple-400" />
+          </button>
           
           <input
             type="text"
@@ -434,7 +304,6 @@ export default function ChatWindow({ chat, currentUser, onClose, onDeleteChat }:
             <Send size={20} className="text-white" />
           </button>
           
-          {/* Голосовое сообщение */}
           <VoiceRecorder
             onSendVoice={handleSendVoice}
             onSendVideo={handleSendVideo}
