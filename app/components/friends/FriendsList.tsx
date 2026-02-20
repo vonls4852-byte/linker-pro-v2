@@ -23,7 +23,6 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
     loadSentRequests();
   }, [currentUser]);
 
-  // Загрузка друзей из API
   const loadFriends = async () => {
     try {
       const response = await fetch(`/api/friends?userId=${currentUser.id}`);
@@ -34,7 +33,6 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
     }
   };
 
-  // Загрузка входящих заявок из API
   const loadFriendRequests = async () => {
     try {
       const response = await fetch(`/api/friends?userId=${currentUser.id}&type=requests`);
@@ -45,7 +43,6 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
     }
   };
 
-  // Загрузка отправленных заявок (пока из localStorage)
   const loadSentRequests = () => {
     const saved = localStorage.getItem(`sent_requests_${currentUser.id}`);
     if (saved) {
@@ -55,7 +52,6 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
     }
   };
 
-  // Поиск пользователей
   const searchUsers = async () => {
     if (!searchQuery.trim()) return;
     setLoading(true);
@@ -66,13 +62,11 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
       
       if (data.users) {
         const currentUserId = currentUser.id;
-        
         const results = data.users.filter((user: any) => 
           user.id !== currentUserId &&
           !friends.some(f => f.id === user.id) &&
           !sentRequests.some(r => r.toUserId === user.id)
         );
-        
         setSearchResults(results);
       } else {
         setSearchResults([]);
@@ -84,7 +78,6 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
     }
   };
 
-  // Отправить заявку
   const sendFriendRequest = async (userId: string, userName: string, userNickname: string) => {
     try {
       const response = await fetch('/api/friends', {
@@ -99,7 +92,6 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
       const data = await response.json();
       
       if (data.success) {
-        // Добавляем в отправленные (локально)
         const newRequest = {
           id: data.request.id,
           toUserId: userId,
@@ -112,8 +104,6 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
         const updatedSent = [...sentRequests, newRequest];
         setSentRequests(updatedSent);
         localStorage.setItem(`sent_requests_${currentUser.id}`, JSON.stringify(updatedSent));
-        
-        // Убираем из результатов поиска
         setSearchResults(prev => prev.filter(u => u.id !== userId));
       }
     } catch (error) {
@@ -121,7 +111,6 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
     }
   };
 
-  // Принять заявку
   const acceptRequest = async (requestId: string, fromUserId: string, fromUserName: string, fromUserNickname: string) => {
     try {
       const response = await fetch('/api/friends', {
@@ -136,10 +125,7 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
       const data = await response.json();
       
       if (data.success) {
-        // Удаляем заявку
         setFriendRequests(prev => prev.filter(r => r.id !== requestId));
-        
-        // Добавляем в друзья
         const newFriend = {
           id: fromUserId,
           name: fromUserName,
@@ -147,7 +133,6 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
           avatar: null,
           addedAt: Date.now()
         };
-        
         setFriends(prev => [...prev, newFriend]);
       }
     } catch (error) {
@@ -155,7 +140,6 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
     }
   };
 
-  // Отклонить заявку
   const rejectRequest = async (requestId: string) => {
     try {
       const response = await fetch('/api/friends', {
@@ -177,14 +161,12 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
     }
   };
 
-  // Отменить отправленную заявку
   const cancelSentRequest = (requestId: string) => {
     const updatedRequests = sentRequests.filter(r => r.id !== requestId);
     setSentRequests(updatedRequests);
     localStorage.setItem(`sent_requests_${currentUser.id}`, JSON.stringify(updatedRequests));
   };
 
-  // Удалить из друзей
   const removeFriend = async (friendId: string, friendName: string) => {
     if (confirm(`Удалить ${friendName} из друзей?`)) {
       try {
@@ -283,7 +265,6 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
 
       {/* Контент */}
       <div className="bg-[#111] rounded-2xl p-6 border border-white/5">
-        {/* Друзья */}
         {activeTab === 'friends' && (
           <>
             {friends.length === 0 ? (
@@ -305,7 +286,7 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
                       <div className="relative">
                         <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
                           <span className="text-white font-bold text-lg">
-                            {friend.name.charAt(0)}
+                            {friend.name ? friend.name.charAt(0).toUpperCase() : '?'}
                           </span>
                         </div>
                         <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-black ${
@@ -313,8 +294,8 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
                         }`} />
                       </div>
                       <div>
-                        <p className="font-medium text-white">{friend.name}</p>
-                        <p className="text-xs text-zinc-500">@{friend.nickname}</p>
+                        <p className="font-medium text-white">{friend.name || 'Пользователь'}</p>
+                        <p className="text-xs text-zinc-500">@{friend.nickname || 'unknown'}</p>
                       </div>
                     </div>
                     <div className="flex gap-2">
@@ -322,7 +303,7 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
                         <MessageCircle size={18} className="text-blue-400" />
                       </button>
                       <button
-                        onClick={() => removeFriend(friend.id, friend.name)}
+                        onClick={() => removeFriend(friend.id, friend.name || 'Пользователь')}
                         className="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
                       >
                         <UserMinus size={18} className="text-red-400" />
@@ -335,7 +316,6 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
           </>
         )}
 
-        {/* Входящие заявки */}
         {activeTab === 'requests' && (
           <>
             {friendRequests.length === 0 ? (
@@ -350,12 +330,12 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
                     <div className="flex items-center gap-3">
                       <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
                         <span className="text-white font-bold text-lg">
-                          {request.fromUserName?.charAt(0) || '?'}
+                          {request.fromUserName ? request.fromUserName.charAt(0).toUpperCase() : '?'}
                         </span>
                       </div>
                       <div>
-                        <p className="font-medium text-white">{request.fromUserName}</p>
-                        <p className="text-xs text-zinc-500">@{request.fromUserNickname}</p>
+                        <p className="font-medium text-white">{request.fromUserName || 'Пользователь'}</p>
+                        <p className="text-xs text-zinc-500">@{request.fromUserNickname || 'unknown'}</p>
                       </div>
                     </div>
                     <div className="flex gap-2">
@@ -379,7 +359,6 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
           </>
         )}
 
-        {/* Отправленные заявки */}
         {activeTab === 'sent' && (
           <>
             {sentRequests.length === 0 ? (
@@ -394,12 +373,12 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
                     <div className="flex items-center gap-3">
                       <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
                         <span className="text-white font-bold text-lg">
-                          {request.toUserName?.charAt(0) || '?'}
+                          {request.toUserName ? request.toUserName.charAt(0).toUpperCase() : '?'}
                         </span>
                       </div>
                       <div>
-                        <p className="font-medium text-white">{request.toUserName}</p>
-                        <p className="text-xs text-zinc-500">@{request.toUserNickname}</p>
+                        <p className="font-medium text-white">{request.toUserName || 'Пользователь'}</p>
+                        <p className="text-xs text-zinc-500">@{request.toUserNickname || 'unknown'}</p>
                         <p className="text-[10px] text-yellow-500 mt-1">Ожидание ответа</p>
                       </div>
                     </div>
@@ -417,7 +396,6 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
           </>
         )}
 
-        {/* Поиск */}
         {activeTab === 'search' && (
           <>
             <div className="relative mb-4">
@@ -447,12 +425,13 @@ export default function FriendsList({ currentUser }: FriendsListProps) {
                     <div className="flex items-center gap-3">
                       <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
                         <span className="text-white font-bold text-lg">
-                          {user.fullName?.charAt(0) || user.nickname?.charAt(0) || '?'}
+                          {user.fullName ? user.fullName.charAt(0).toUpperCase() : 
+                           user.nickname ? user.nickname.charAt(0).toUpperCase() : '?'}
                         </span>
                       </div>
                       <div>
-                        <p className="font-medium text-white">{user.fullName || user.nickname}</p>
-                        <p className="text-xs text-zinc-500">@{user.nickname}</p>
+                        <p className="font-medium text-white">{user.fullName || user.nickname || 'Пользователь'}</p>
+                        <p className="text-xs text-zinc-500">@{user.nickname || 'unknown'}</p>
                       </div>
                     </div>
                     <button
