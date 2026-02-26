@@ -117,6 +117,34 @@ export async function getAllUsers(): Promise<Partial<User>[]> {
   }
 }
 
+// Поиск пользователей
+export async function searchUsers(query: string): Promise<Partial<User>[]> {
+  if (!redis) return [];
+
+  try {
+    const ids = await redis.smembers('users:all');
+    const users = [];
+
+    for (const id of ids) {
+      const user = await getUserById(id);
+      if (user) {
+        if (
+          user.nickname.toLowerCase().includes(query.toLowerCase()) ||
+          user.fullName.toLowerCase().includes(query.toLowerCase())
+        ) {
+          const { password, ...safeUser } = user;
+          users.push(safeUser);
+        }
+      }
+    }
+
+    return users.slice(0, 10);
+  } catch (error) {
+    console.error('Error searching users:', error);
+    return [];
+  }
+}
+
 // Обновление пользователя
 export async function updateUser(id: string, data: Partial<User>): Promise<User | null> {
   if (!redis) return null;
@@ -178,7 +206,7 @@ export async function getLastActive(userId: string): Promise<number | null> {
 export async function isUserOnline(userId: string): Promise<boolean> {
   const lastActive = await getLastActive(userId);
   if (!lastActive) return false;
-  
+
   const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
   return lastActive > fiveMinutesAgo;
 }
@@ -186,11 +214,11 @@ export async function isUserOnline(userId: string): Promise<boolean> {
 // Получить статусы нескольких пользователей
 export async function getOnlineStatus(userIds: string[]): Promise<Record<string, boolean>> {
   const status: Record<string, boolean> = {};
-  
+
   for (const userId of userIds) {
     status[userId] = await isUserOnline(userId);
   }
-  
+
   return status;
 }
 
