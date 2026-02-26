@@ -23,11 +23,17 @@ export default function ChatWindow({ chat, currentUser, onClose, onDeleteChat }:
   useEffect(() => {
     if (!chat?.id) return;
 
+    console.log('🔄 Starting periodic check for chat:', chat.id);
+
     const interval = setInterval(() => {
+      console.log('🔄 Checking for new messages...');
       loadMessages();
     }, 3000);
 
-    return () => clearInterval(interval);
+    return () => {
+      console.log('🛑 Stopping periodic check');
+      clearInterval(interval);
+    };
   }, [chat?.id]);
 
   useEffect(() => {
@@ -36,7 +42,7 @@ export default function ChatWindow({ chat, currentUser, onClose, onDeleteChat }:
 
   const loadMessages = async () => {
     try {
-      const response = await fetch(`/api/messages?chatId=${chat.id}`);
+      const response = await fetch(`/api/messages?chatId=${chat.id}&_=${Date.now()}`);
       const data = await response.json();
       if (data.messages) {
         setMessages(data.messages);
