@@ -27,6 +27,7 @@ export default function GroupInfoModal({
   const [participants, setParticipants] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [confirmAction, setConfirmAction] = useState<string | null>(null);
+  const [updatingAdmin, setUpdatingAdmin] = useState<string | null>(null);
 
   // ==================== 2. ЗАГРУЗКА ДАННЫХ ====================
   useEffect(() => {
@@ -35,7 +36,6 @@ export default function GroupInfoModal({
     }
   }, [chat]);
 
-  // ==================== 3. ФУНКЦИЯ ЗАГРУЗКИ ====================
   const loadParticipants = async () => {
     setLoading(true);
     try {
@@ -52,6 +52,35 @@ export default function GroupInfoModal({
       console.error('Error loading participants:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ==================== 3. УПРАВЛЕНИЕ АДМИНАМИ ====================
+  const toggleAdmin = async (targetUserId: string, action: 'add' | 'remove') => {
+    setUpdatingAdmin(targetUserId);
+    try {
+      const response = await fetch('/api/groups', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chatId: chat.id,
+          userId: currentUser.id,
+          targetUserId,
+          action
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        // Обновляем локальный чат
+        chat.admins = data.chat.admins;
+        // Перезагружаем участников чтобы обновить отображение
+        await loadParticipants();
+      }
+    } catch (error) {
+      console.error('Error toggling admin:', error);
+    } finally {
+      setUpdatingAdmin(null);
     }
   };
 
@@ -112,7 +141,10 @@ export default function GroupInfoModal({
           chat={chat}
           currentUser={currentUser}
           isAdmin={isAdmin}
+          isCreator={isCreator}
           onAddClick={handleAddClick}
+          onToggleAdmin={toggleAdmin}
+          updatingAdmin={updatingAdmin}
         />
 
         {/* Кнопки действий */}
@@ -171,14 +203,17 @@ function GroupInfo({ chat, isCreator, participantsCount }: any) {
 }
 
 // ==================== 8. КОМПОНЕНТ СПИСКА УЧАСТНИКОВ ====================
-function ParticipantsList({ participants, loading, chat, currentUser, isAdmin, onAddClick }: {
-  participants: any[];
-  loading: boolean;
-  chat: any;
-  currentUser: any;
-  isAdmin: boolean;
-  onAddClick: () => void;
-}) {
+function ParticipantsList({
+  participants,
+  loading,
+  chat,
+  currentUser,
+  isAdmin,
+  isCreator,
+  onAddClick,
+  onToggleAdmin,
+  updatingAdmin
+}: any) {
   return (
     <div className="mb-6">
       <div className="flex items-center justify-between mb-3">
@@ -198,13 +233,16 @@ function ParticipantsList({ participants, loading, chat, currentUser, isAdmin, o
         {loading ? (
           <LoadingState />
         ) : participants.length > 0 ? (
-          participants.map(user => (
+          participants.map((user: any) => (
             <ParticipantItem
               key={user.id}
               user={user}
               chat={chat}
               currentUser={currentUser}
               isAdmin={isAdmin}
+              isCreator={isCreator}
+              onToggleAdmin={onToggleAdmin}
+              isUpdating={updatingAdmin === user.id}
             />
           ))
         ) : (
@@ -216,15 +254,27 @@ function ParticipantsList({ participants, loading, chat, currentUser, isAdmin, o
 }
 
 // ==================== 9. КОМПОНЕНТ УЧАСТНИКА ====================
-function ParticipantItem({ user, chat, currentUser, isAdmin }: {
+function ParticipantItem({
+  user,
+  chat,
+  currentUser,
+  isAdmin,
+  isCreator,
+  onToggleAdmin,
+  isUpdating
+}: {
   user: any;
   chat: any;
   currentUser: any;
   isAdmin: boolean;
+  isCreator: boolean;
+  onToggleAdmin?: (userId: string, action: 'add' | 'remove') => void;
+  isUpdating?: boolean;
 }) {
-  const isCreator = chat.createdBy === user.id;
+  const isUserCreator = chat.createdBy === user.id;
   const isCurrentUser = user.id === currentUser.id;
   const isUserAdmin = chat.admins?.includes(user.id);
+  const canManage = isCreator && !isUserCreator; // Только создатель может управлять
 
   return (
     <div className="flex items-center justify-between p-2 bg-black/30 rounded-xl">
@@ -238,14 +288,39 @@ function ParticipantItem({ user, chat, currentUser, isAdmin }: {
           <p className="font-medium text-white flex items-center gap-2">
             {user.fullName || user.nickname}
             {isCurrentUser && <span className="text-xs text-zinc-500">(вы)</span>}
-            {isCreator && <Crown size={12} className="text-yellow-400" />}
-            {isUserAdmin && !isCreator && (
+            {isUserCreator && <Crown size={12} className="text-yellow-400" />}
+            {isUserAdmin && !isUserCreator && (
               <span className="text-xs text-blue-400">админ</span>
             )}
           </p>
           <p className="text-xs text-zinc-500">@{user.nickname}</p>
         </div>
       </div>
+
+      {/* Кнопки управления для создателя */}
+      {canManage && !isUserCreator && (
+        <div className="flex gap-1">
+          {isUpdating ? (
+            <div className="w-7 h-7 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+          ) : isUserAdmin ? (
+            <button
+              onClick={() => onToggleAdmin?.(user.id, 'remove')}
+              className="p-1.5 bg-red-500/20 hover:bg-red-500/30 rounded-lg transition-colors"
+              title="Снять админа"
+            >
+              <Crown size={14} className="text-red-400" />
+            </button>
+          ) : (
+            <button
+              onClick={() => onToggleAdmin?.(user.id, 'add')}
+              className="p-1.5 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg transition-colors"
+              title="Назначить админом"
+            >
+              <Crown size={14} className="text-blue-400" />
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
