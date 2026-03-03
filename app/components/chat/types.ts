@@ -8,6 +8,8 @@ export interface Chat {
   updatedAt: number;
   createdAt: number;
   avatar?: string;
+  isGroup?: boolean;
+  admins?: string[];
 }
 
 export interface Message {

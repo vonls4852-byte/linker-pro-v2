@@ -74,6 +74,14 @@ export interface Chat {
   lastMessage: Message | null;
   createdAt: number;
   createdBy: string;
+
+  // Групповые чаты
+  admins?: string[];           
+  avatar?: string | null; 
+  
+  // Сортировка и уведомления
+  updatedAt: number;           
+  unreadCount: number; 
 }
 
 export interface Message {
