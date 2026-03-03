@@ -28,8 +28,6 @@ export default function GroupInfoModal({
   const [loading, setLoading] = useState(false);
   const [confirmAction, setConfirmAction] = useState<string | null>(null);
 
-  if (!isOpen || !chat) return null;
-
   // ==================== 2. ЗАГРУЗКА ДАННЫХ ====================
   useEffect(() => {
     if (chat?.participants) {
@@ -37,6 +35,7 @@ export default function GroupInfoModal({
     }
   }, [chat]);
 
+  // ==================== 3. ФУНКЦИЯ ЗАГРУЗКИ ====================
   const loadParticipants = async () => {
     setLoading(true);
     try {
@@ -56,11 +55,14 @@ export default function GroupInfoModal({
     }
   };
 
-  // ==================== 3. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
+  // ==================== 4. ПРОВЕРКА ОТКРЫТИЯ ====================
+  if (!isOpen || !chat) return null;
+
+  // ==================== 5. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
   const isCreator = chat.createdBy === currentUser.id;
   const isAdmin = chat.admins?.includes(currentUser.id) || isCreator;
 
-  // ==================== 4. ОБРАБОТЧИКИ ДЕЙСТВИЙ ====================
+  // ==================== 6. ОБРАБОТЧИКИ ДЕЙСТВИЙ ====================
   const handleAddClick = () => {
     if (onAddParticipants) {
       onAddParticipants();
@@ -88,7 +90,7 @@ export default function GroupInfoModal({
     setConfirmAction(null);
   };
 
-  // ==================== 5. JSX КОМПОНЕНТА ====================
+  // ==================== 7. JSX КОМПОНЕНТА ====================
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-[#111] rounded-2xl p-6 w-full max-w-md border border-white/10">
@@ -110,6 +112,7 @@ export default function GroupInfoModal({
           chat={chat}
           currentUser={currentUser}
           isAdmin={isAdmin}
+          onAddClick={handleAddClick}
         />
 
         {/* Кнопки действий */}
@@ -168,12 +171,13 @@ function GroupInfo({ chat, isCreator, participantsCount }: any) {
 }
 
 // ==================== 8. КОМПОНЕНТ СПИСКА УЧАСТНИКОВ ====================
-function ParticipantsList({ participants, loading, chat, currentUser, isAdmin }: {
+function ParticipantsList({ participants, loading, chat, currentUser, isAdmin, onAddClick }: {
   participants: any[];
   loading: boolean;
   chat: any;
   currentUser: any;
   isAdmin: boolean;
+  onAddClick: () => void;
 }) {
   return (
     <div className="mb-6">
@@ -181,7 +185,7 @@ function ParticipantsList({ participants, loading, chat, currentUser, isAdmin }:
         <h4 className="text-sm font-medium text-zinc-400">Участники</h4>
         {isAdmin && (
           <button
-            onClick={() => { }} // Будет передан через пропсы
+            onClick={onAddClick}
             className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
           >
             <UserPlus size={14} />
