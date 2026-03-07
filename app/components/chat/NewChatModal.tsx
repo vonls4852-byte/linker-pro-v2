@@ -40,16 +40,20 @@ export default function NewChatModal({ isOpen, onClose, currentUser, onChatCreat
     }
   };
 
-  // Создать новый чат
+    // Создать новый чат
   const createNewChat = (userId: string, userName: string) => {
     const newChat: Chat = {
       id: `chat_${Date.now()}`,
       type: 'private',
       participants: [currentUser.id, userId],
       name: userName,
+      lastMessage: undefined,
       unreadCount: 0,
       updatedAt: Date.now(),
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      createdBy: currentUser.id,
+      admins: undefined,
+      avatar: null
     };
 
     // Создаём чат и для другого пользователя
@@ -80,6 +84,7 @@ export default function NewChatModal({ isOpen, onClose, currentUser, onChatCreat
     onChatCreated(newChat);
     setSearchQuery('');
     setSearchResults([]);
+    onClose();
   };
 
   return (
