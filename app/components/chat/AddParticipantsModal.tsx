@@ -1,23 +1,14 @@
 "use client";
 import React, { useState } from 'react';
 import { X, Search, Check } from 'lucide-react';
+import { AddParticipantsModalProps } from './types';
 
-// ==================== ИНТЕРФЕЙСЫ ====================
-interface AddParticipantsModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  groupChat: any;
-  currentUser: any;
-  onParticipantsAdded: () => void;
-}
-
-// ==================== ОСНОВНОЙ КОМПОНЕНТ ====================
-export default function AddParticipantsModal({ 
-  isOpen, 
-  onClose, 
-  groupChat, 
+export default function AddParticipantsModal({
+  isOpen,
+  onClose,
+  groupChat,
   currentUser,
-  onParticipantsAdded 
+  onParticipantsAdded
 }: AddParticipantsModalProps) {
   // ==================== 1. СОСТОЯНИЯ ====================
   const [searchQuery, setSearchQuery] = useState('');
@@ -32,17 +23,17 @@ export default function AddParticipantsModal({
   const searchUsers = async () => {
     if (!searchQuery.trim()) return;
     setLoading(true);
-
     try {
-      const response = await fetch(`/api/users?search=${encodeURIComponent(searchQuery)}`);
+      const response = await fetch(
+        `/api/users?search=${encodeURIComponent(searchQuery)}`
+      );
       const data = await response.json();
-
       if (data.users) {
-        // Фильтруем: только те, кто ещё не в группе
-        const results = data.users.filter((user: any) => 
-          user.id !== currentUser.id &&
-          !groupChat.participants.includes(user.id) &&
-          !selectedUsers.some(u => u.id === user.id)
+        const results = data.users.filter(
+          (user: any) =>
+            user.id !== currentUser.id &&
+            !groupChat.participants.includes(user.id) &&
+            !selectedUsers.some((u) => u.id === user.id)
         );
         setSearchResults(results);
       }
@@ -56,42 +47,34 @@ export default function AddParticipantsModal({
   // ==================== 3. УПРАВЛЕНИЕ ВЫБРАННЫМИ ====================
   const addUser = (user: any) => {
     setSelectedUsers([...selectedUsers, user]);
-    setSearchResults(searchResults.filter(u => u.id !== user.id));
+    setSearchResults(searchResults.filter((u) => u.id !== user.id));
     setSearchQuery('');
   };
 
   const removeUser = (userId: string) => {
-    setSelectedUsers(selectedUsers.filter(u => u.id !== userId));
+    setSelectedUsers(selectedUsers.filter((u) => u.id !== userId));
   };
 
   // ==================== 4. ОТПРАВКА В API ====================
   const addParticipants = async () => {
     if (selectedUsers.length === 0) return;
-    
     setSubmitting(true);
-
     try {
       const response = await fetch('/api/groups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           chatId: groupChat.id,
-          userIds: selectedUsers.map(u => u.id),
+          userIds: selectedUsers.map((u) => u.id),
           addedBy: currentUser.id
         })
       });
-
-      const data = await response.json();
-      
-      if (data.success) {
+      if (response.ok) {
         onParticipantsAdded();
         onClose();
-      } else {
-        alert('Ошибка: ' + data.error);
       }
     } catch (error) {
       console.error('Error adding participants:', error);
-      alert('Ошибка при добавлении участников');
     } finally {
       setSubmitting(false);
     }
@@ -101,7 +84,6 @@ export default function AddParticipantsModal({
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
       <div className="bg-[#111] rounded-2xl p-6 w-full max-w-md border border-white/10">
-        
         {/* Заголовок */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-blue-500">Добавить участников</h2>
@@ -112,7 +94,10 @@ export default function AddParticipantsModal({
 
         {/* Поиск */}
         <div className="relative mb-4">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+          <Search
+            size={16}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"
+          />
           <input
             type="text"
             value={searchQuery}
@@ -126,12 +111,22 @@ export default function AddParticipantsModal({
         {/* Выбранные участники */}
         {selectedUsers.length > 0 && (
           <div className="mb-4">
-            <p className="text-xs text-zinc-500 mb-2">Выбрано: {selectedUsers.length}</p>
+            <p className="text-xs text-zinc-500 mb-2">
+              Выбрано: {selectedUsers.length}
+            </p>
             <div className="flex flex-wrap gap-2">
-              {selectedUsers.map(user => (
-                <div key={user.id} className="flex items-center gap-1 bg-blue-500/20 rounded-full pl-2 pr-1 py-1">
-                  <span className="text-xs text-white">{user.fullName || user.nickname}</span>
-                  <button onClick={() => removeUser(user.id)} className="p-1 hover:bg-blue-500/30 rounded-full">
+              {selectedUsers.map((user) => (
+                <div
+                  key={user.id}
+                  className="flex items-center gap-1 bg-blue-500/20 rounded-full pl-2 pr-1 py-1"
+                >
+                  <span className="text-xs text-white">
+                    {user.fullName || user.nickname}
+                  </span>
+                  <button
+                    onClick={() => removeUser(user.id)}
+                    className="p-1 hover:bg-blue-500/30 rounded-full"
+                  >
                     <X size={12} className="text-blue-400" />
                   </button>
                 </div>
@@ -143,7 +138,7 @@ export default function AddParticipantsModal({
         {/* Результаты поиска */}
         {searchResults.length > 0 && (
           <div className="space-y-2 max-h-60 overflow-y-auto mb-4">
-            {searchResults.map(user => (
+            {searchResults.map((user) => (
               <div
                 key={user.id}
                 onClick={() => addUser(user)}
@@ -155,7 +150,9 @@ export default function AddParticipantsModal({
                   </span>
                 </div>
                 <div className="flex-1">
-                  <p className="font-medium text-white">{user.fullName || user.nickname}</p>
+                  <p className="font-medium text-white">
+                    {user.fullName || user.nickname}
+                  </p>
                   <p className="text-xs text-zinc-500">@{user.nickname}</p>
                 </div>
                 <Check size={18} className="text-blue-400" />
@@ -168,16 +165,9 @@ export default function AddParticipantsModal({
         <button
           onClick={addParticipants}
           disabled={selectedUsers.length === 0 || submitting}
-          className="w-full py-3 bg-blue-500 hover:bg-blue-600 rounded-xl font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+          className="w-full py-3 bg-blue-500 hover:bg-blue-600 rounded-xl font-medium disabled:opacity-50"
         >
-          {submitting ? (
-            <>
-              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Добавление...
-            </>
-          ) : (
-            `Добавить (${selectedUsers.length})`
-          )}
+          {submitting ? 'Добавление...' : `Добавить (${selectedUsers.length})`}
         </button>
       </div>
     </div>

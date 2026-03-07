@@ -1,15 +1,15 @@
 "use client";
 import React, { useState } from 'react';
 import { X, Search, Check } from 'lucide-react';
+import { CreateGroupModalProps } from './types';
 
-interface CreateGroupModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  currentUser: any;
-  onGroupCreated: (groupData: any) => void;
-}
-
-export default function CreateGroupModal({ isOpen, onClose, currentUser, onGroupCreated }: CreateGroupModalProps) {
+export default function CreateGroupModal({
+  isOpen,
+  onClose,
+  currentUser,
+  onGroupCreated
+}: CreateGroupModalProps) {
+  // ==================== 1. СОСТОЯНИЯ ====================
   const [groupName, setGroupName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -18,21 +18,20 @@ export default function CreateGroupModal({ isOpen, onClose, currentUser, onGroup
 
   if (!isOpen) return null;
 
-  // Поиск друзей для добавления в группу
+  // ==================== 2. ПОИСК ПОЛЬЗОВАТЕЛЕЙ ====================
   const searchFriends = async () => {
     if (!searchQuery.trim()) return;
     setLoading(true);
-    
     try {
-      // Ищем среди друзей
-      const response = await fetch(`/api/users?search=${encodeURIComponent(searchQuery)}`);
+      const response = await fetch(
+        `/api/users?search=${encodeURIComponent(searchQuery)}`
+      );
       const data = await response.json();
-      
       if (data.users) {
-        // Фильтруем: только не выбранные пользователи
-        const friends = data.users.filter((user: any) => 
-          user.id !== currentUser.id && 
-          !selectedUsers.some(u => u.id === user.id)
+        const friends = data.users.filter(
+          (user: any) =>
+            user.id !== currentUser.id &&
+            !selectedUsers.some((u) => u.id === user.id)
         );
         setSearchResults(friends);
       }
@@ -43,16 +42,18 @@ export default function CreateGroupModal({ isOpen, onClose, currentUser, onGroup
     }
   };
 
+  // ==================== 3. УПРАВЛЕНИЕ ВЫБРАННЫМИ ====================
   const addUser = (user: any) => {
     setSelectedUsers([...selectedUsers, user]);
-    setSearchResults(searchResults.filter(u => u.id !== user.id));
+    setSearchResults(searchResults.filter((u) => u.id !== user.id));
     setSearchQuery('');
   };
 
   const removeUser = (userId: string) => {
-    setSelectedUsers(selectedUsers.filter(u => u.id !== userId));
+    setSelectedUsers(selectedUsers.filter((u) => u.id !== userId));
   };
 
+  // ==================== 4. СОЗДАНИЕ ГРУППЫ ====================
   const createGroup = () => {
     if (selectedUsers.length < 1) {
       alert('Добавьте хотя бы одного участника');
@@ -62,14 +63,14 @@ export default function CreateGroupModal({ isOpen, onClose, currentUser, onGroup
     const groupData = {
       id: `group_${Date.now()}`,
       name: groupName.trim() || `Группа ${selectedUsers.length + 1}`,
-      isGroup: true,
-      participants: [currentUser.id, ...selectedUsers.map(u => u.id)],
+      type: 'group',
+      participants: [currentUser.id, ...selectedUsers.map((u) => u.id)],
       createdBy: currentUser.id,
       admins: [currentUser.id],
       createdAt: Date.now(),
       updatedAt: Date.now(),
       unreadCount: 0,
-      lastMessage: null,
+      lastMessage: undefined,
       avatar: null
     };
 
@@ -80,12 +81,17 @@ export default function CreateGroupModal({ isOpen, onClose, currentUser, onGroup
     setSearchQuery('');
   };
 
+  // ==================== 5. JSX ====================
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-[#111] rounded-2xl p-6 w-full max-w-md border border-white/10">
+        {/* Заголовок */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-blue-500">Создать группу</h2>
-          <button onClick={onClose} className="p-1 hover:bg-white/5 rounded-lg">
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-white/5 rounded-lg"
+          >
             <X size={20} className="text-zinc-400" />
           </button>
         </div>
@@ -101,7 +107,10 @@ export default function CreateGroupModal({ isOpen, onClose, currentUser, onGroup
 
         {/* Поиск участников */}
         <div className="relative mb-4">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+          <Search
+            size={16}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"
+          />
           <input
             type="text"
             value={searchQuery}
@@ -115,12 +124,22 @@ export default function CreateGroupModal({ isOpen, onClose, currentUser, onGroup
         {/* Выбранные участники */}
         {selectedUsers.length > 0 && (
           <div className="mb-4">
-            <p className="text-xs text-zinc-500 mb-2">Выбрано: {selectedUsers.length}</p>
+            <p className="text-xs text-zinc-500 mb-2">
+              Выбрано: {selectedUsers.length}
+            </p>
             <div className="flex flex-wrap gap-2">
-              {selectedUsers.map(user => (
-                <div key={user.id} className="flex items-center gap-1 bg-blue-500/20 rounded-full pl-2 pr-1 py-1">
-                  <span className="text-xs text-white">{user.fullName || user.nickname}</span>
-                  <button onClick={() => removeUser(user.id)} className="p-1 hover:bg-blue-500/30 rounded-full">
+              {selectedUsers.map((user) => (
+                <div
+                  key={user.id}
+                  className="flex items-center gap-1 bg-blue-500/20 rounded-full pl-2 pr-1 py-1"
+                >
+                  <span className="text-xs text-white">
+                    {user.fullName || user.nickname}
+                  </span>
+                  <button
+                    onClick={() => removeUser(user.id)}
+                    className="p-1 hover:bg-blue-500/30 rounded-full"
+                  >
                     <X size={12} className="text-blue-400" />
                   </button>
                 </div>
@@ -132,7 +151,7 @@ export default function CreateGroupModal({ isOpen, onClose, currentUser, onGroup
         {/* Результаты поиска */}
         {searchResults.length > 0 && (
           <div className="space-y-2 max-h-60 overflow-y-auto mb-4">
-            {searchResults.map(user => (
+            {searchResults.map((user) => (
               <div
                 key={user.id}
                 onClick={() => addUser(user)}
@@ -144,10 +163,12 @@ export default function CreateGroupModal({ isOpen, onClose, currentUser, onGroup
                   </span>
                 </div>
                 <div className="flex-1">
-                  <p className="font-medium text-white">{user.fullName || user.nickname}</p>
+                  <p className="font-medium text-white">
+                    {user.fullName || user.nickname}
+                  </p>
                   <p className="text-xs text-zinc-500">@{user.nickname}</p>
                 </div>
-                <Check size={18} className="text-blue-400 opacity-0" />
+                <Check size={18} className="text-blue-400" />
               </div>
             ))}
           </div>
