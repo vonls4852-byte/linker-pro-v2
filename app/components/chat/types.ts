@@ -64,6 +64,14 @@ export interface CreateGroupModalProps {
   onGroupCreated: (groupData: any) => void;
 }
 
+export interface NewChatModalProps {  // ← ДОБАВИТЬ ЭТОТ ИНТЕРФЕЙС
+  isOpen: boolean;
+  onClose: () => void;
+  currentUser: any;
+  onChatCreated: (chat: Chat) => void;
+  existingChats: Chat[];
+}
+
 export interface GroupInfoModalProps {
   isOpen: boolean;
   onClose: () => void;
