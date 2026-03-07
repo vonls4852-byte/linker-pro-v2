@@ -7,7 +7,7 @@ export interface Chat {
   unreadCount: number;
   updatedAt: number;
   createdAt: number;
-  avatar?: string;
+  avatar?: string | null;
   isGroup?: boolean;
   admins?: string[];
 }

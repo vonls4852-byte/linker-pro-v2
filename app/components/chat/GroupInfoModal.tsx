@@ -55,6 +55,28 @@ export default function GroupInfoModal({
     }
   };
 
+  const handleAvatarUpload = async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('chatId', chat.id);
+    formData.append('userId', currentUser.id);
+
+    try {
+      const response = await fetch('/api/groups/avatar', {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        chat.avatar = data.key;
+        await loadParticipants();
+      }
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+    }
+  };
+
   // ==================== 3. УПРАВЛЕНИЕ АДМИНАМИ ====================
   const toggleAdmin = async (targetUserId: string, action: 'add' | 'remove') => {
     setUpdatingAdmin(targetUserId);
@@ -182,11 +204,54 @@ function ModalHeader({ onClose }: { onClose: () => void }) {
 }
 
 // ==================== 7. КОМПОНЕНТ ИНФОРМАЦИИ О ГРУППЕ ====================
-function GroupInfo({ chat, isCreator, participantsCount }: any) {
+function GroupInfo({ chat, isCreator, participantsCount, onAvatarUpload }: any) {
+  const [uploading, setUploading] = useState(false);
+
+  const handleAvatarClick = () => {
+    if (!isCreator) return;
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Файл слишком большой. Максимум 5MB');
+        return;
+      }
+
+      setUploading(true);
+      await onAvatarUpload(file);
+      setUploading(false);
+    };
+    input.click();
+  };
+
   return (
     <div className="mb-6 text-center">
-      <div className="w-20 h-20 mx-auto mb-3 rounded-full bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center">
-        <Users size={36} className="text-white" />
+      <div
+        className={`w-20 h-20 mx-auto mb-3 rounded-full bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center relative cursor-pointer group ${!isCreator ? 'cursor-default' : ''}`}
+        onClick={handleAvatarClick}
+      >
+        {chat.avatar ? (
+          <img src={chat.avatar} alt={chat.name} className="w-full h-full object-cover rounded-full" />
+        ) : (
+          <Users size={36} className="text-white" />
+        )}
+
+        {isCreator && !uploading && (
+          <div className="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            <span className="text-white text-xs">Изменить</span>
+          </div>
+        )}
+
+        {uploading && (
+          <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-white" />
+          </div>
+        )}
       </div>
       <h3 className="text-xl font-bold text-white">{chat.name}</h3>
       <p className="text-sm text-zinc-500 mt-1">
